@@ -9,6 +9,8 @@
     float determinant(unsigned size, float *array)                                                                      calculates determinant of array.
     void inverse(unsigned size, float *array)                                                                           inverts a given array.
     void transpose(unsigned rows, unsigned cols, float *array, float *trans)                                            transposes a given array, puts result in trans.
+    float dot(ROWS, &vector1[0][0], &vector2[0][0]);                                                                    returns dot product of two given vectors.
+
 */
 
 #include <stdlib.h>
@@ -60,15 +62,13 @@ void randomfill(unsigned size, float *array, unsigned max){
 //call: multiply(3,4,4,5,&a[0][0],&b[0][0],&c[0][0]);
 //where dimensions of a are 3x4, b are 4x5, and c are 3x5.
 void multiply(unsigned r1, unsigned c1, unsigned r2, unsigned c2, float *array1, float *array2, float *array3){
-    unsigned a,b,c;
-    float sum=0.0;
+    unsigned i,j;
+    float sum;
 
-    for (a = 0; a < r2; a++) {
-        for (b = 0; b < c1; b++) {
-            for (c = 0; c < r1; c++) sum +=  *(array1 + a*c1 + c) * *(array2+c*c2+b);
-            *(array3+a*c2+b) = sum;
-            sum = 0;
-        }
+    for(i=0; i<r1*c2; i++){
+        sum=0;
+        for(j=0; j<r2; j++) sum += *(array1+i/c2*c1+j) * *(array2+j*c2+i%c2);
+        *(array3+i) = sum;
     }
 }
 
@@ -117,6 +117,8 @@ float determinant(unsigned size, float *array){
 void transpose(unsigned rows, unsigned cols, float *array, float *trans){
     unsigned i;
     for(i=0; i<rows*cols; i++) *(trans+i) = *(array+(i%rows)*cols+i/rows);
+    //for(i=0; i<rows*cols; i++) *(trans+i) = array[i%rows][i/rows];
+
 }
 
 
@@ -170,4 +172,12 @@ void inverse(unsigned size, float *array){
     copy(size*size, &inversematrix[0][0], array);                       //  copy inversematrix over original matrix.
 }
 
+
+float dot(unsigned rows, float *vector1, float *vector2){
+    float sum=0;
+    unsigned i;
+
+    for(i=0; i<rows; i++) sum += *(vector1+i) * *(vector2+i);
+    return sum;
+}
 
