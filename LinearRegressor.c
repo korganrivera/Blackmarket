@@ -9,6 +9,9 @@
     2015.5.23.12:09 Got it working.  Need to add file reading functions, but the core of it works.  Pretty cool!
     2015.6.2.20:06  I lost the MyLinAlg.c file, and have to rewrite it.  So far there's something wrong with it. -_-
     2015.6.2.20:39  Okay fixed.  Actually ended up with a shorter function.  Not sure why the other one died.
+
+    2015.6.6.12:16  Needs more testing.  Didn't give me correct answers on my last use.  Had a problem with a 10x2 matrix, transpose gave wrong answer and
+                    r-squared came out negative @_@
 */
 
 #include <stdio.h>
@@ -24,16 +27,16 @@ int main(int argc, char *argv[]){
     FILE *in;
     unsigned i;
     char c;
-    float tempmatrix1[ROWS][1], tempmatrix2[ROWS][1];   //  used for calculating rsquared. 1d defined as 2d.  I know it's pointless. :)
-    float d, f=0, average=0, rsquared;
-    float b[COLS][1];                                   //  this is matrix b.  It will hold the solution in the end.
-    float s[ROWS][1];                                   //  this is matrix s.  It will hold the number of sales.  it comes from the last vector in the user's matrix.
+    double tempmatrix1[ROWS][1], tempmatrix2[ROWS][1];   //  used for calculating rsquared. 1d defined as 2d.  I know it's pointless. :)
+    double d, f=0, average=0, rsquared;
+    double b[COLS][1];                                   //  this is matrix b.  It will hold the solution in the end.
+    double s[ROWS][1];                                   //  this is matrix s.  It will hold the number of sales.  it comes from the last vector in the user's matrix.
                                                         //  later on these arrays will be malloced.
-    float xtrans[COLS][ROWS];                           //  transpose of matrix.
-    float transmult[COLS][COLS];                        //  matrix times its transpose.
-    float transmult2[COLS][ROWS];                       //  transmult times xtrans.
+    double xtrans[COLS][ROWS];                           //  transpose of matrix.
+    double transmult[COLS][COLS];                        //  matrix times its transpose.
+    double transmult2[COLS][ROWS];                       //  transmult times xtrans.
 
-    float matrix[ROWS][COLS]={       //  this is the shit that the user gives me.  I'll reuse the space once I move some stuff around.  It will be matrix x after that.
+    double matrix[ROWS][COLS]={       //  this is the shit that the user gives me.  I'll reuse the space once I move some stuff around.  It will be matrix x after that.
         {8.0, 0.0, 100.4},
         {12.0, 1.0, 104.01},
         {18.0, 2.0, 97.49},
@@ -44,11 +47,11 @@ int main(int argc, char *argv[]){
         {12.0, 7, 102.17},
         {3.0, 8, 116.29},
         {14.0, 9, 97.32}
-  };
+    };
 
     //  calculate average of actual y values for r-squared later.
     for(i=0; i<ROWS; i++) average += matrix[i][COLS-1];
-    average /= (float)ROWS;
+    average /= (double)ROWS;
 
     puts("\nuser's matrix:");
     echoarray(ROWS,COLS,&matrix[0][0]);
@@ -65,26 +68,25 @@ int main(int argc, char *argv[]){
     //  transpose x into xtrans.
     transpose(ROWS, COLS, &matrix[0][0],&xtrans[0][0]);
 
-//    puts("\ntranspose x:");
-//    echoarray(COLS,ROWS,&xtrans[0][0]);
+    puts("\ntranspose x:");
+    echoarray(COLS,ROWS,&xtrans[0][0]);
 
     //  multiply the transpose 'xtrans' with x, put into 'transmult'.
     multiply(COLS,ROWS,ROWS,COLS,&xtrans[0][0],&matrix[0][0],&transmult[0][0]);
 
-//   puts("\nmultiply transpose with x:");
-//    echoarray(COLS,COLS,&transmult[0][0]);
+    puts("\nmultiply transpose with x:");
+    echoarray(COLS,COLS,&transmult[0][0]);
 
     //  invert 'transmult'.
     inverse(COLS, &transmult[0][0]);
 
-//    puts("\ninvert that:");
-//    echoarray(COLS,COLS,&transmult[0][0]);
-
+    puts("\ninvert that:");
+    echoarray(COLS,COLS,&transmult[0][0]);
     //  multiply 'transmult' with 'xtrans'. put into 'transmult2'.
     multiply(COLS,COLS,COLS,ROWS,&transmult[0][0],&xtrans[0][0],&transmult2[0][0]);
 
-//    puts("\nmultiply that with xtrans:");
-//    echoarray(COLS, ROWS, &transmult2[0][0]);
+    puts("\nmultiply that with xtrans:");
+    echoarray(COLS, ROWS, &transmult2[0][0]);
 
     //  then multiply that with 's'. put into 'B'.
     multiply(COLS,ROWS,ROWS,1,&transmult2[0][0],&s[0][0],&b[0][0]);
@@ -107,7 +109,7 @@ int main(int argc, char *argv[]){
     sum(ROWS, &s[0][0], &tempmatrix1[0][0], &tempmatrix2[0][0]);                    //  subtract actual values from predicted values.
     d = dot(ROWS, &tempmatrix2[0][0], &tempmatrix2[0][0]);                          //  sum squares of elements in tempmatrix2. This is numerator for rsquared.
 
- //   printf("\ndot = %f", d);
+   printf("\ndot = %f", d);
 
     for(i=0; i<ROWS; i++) f += (s[i][0]-average) * (s[i][0]-average);               //  sum square of difference between actual s values and average s value.
                                                                                     //  this is denominator for rsquared.
@@ -165,10 +167,10 @@ int main(int argc, char *argv[]){
 
     //  malloc space for the matrix.
     //  determine size of minor matrix.
-    arraysize = sizeof(float)*rows*cols;
+    arraysize = sizeof(double)*rows*cols;
 
     //  malloc space for array.
-    if((array = (float*) malloc(arraysize))==NULL){
+    if((array = (double*) malloc(arraysize))==NULL){
         puts("malloc asplode!");
         exit(1);
     }
