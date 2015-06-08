@@ -1,0 +1,86 @@
+NOTE ON HOW TO GENERATE 2D GRID CITY PLANS
+
+Say I have a 2d grid map of dimensions MxN, and I am using
+this to represent a city grid. Each element can contain a
+1 or a 0. 1 means building block, and 0 means street.
+
+Say I want to generate a map like the following:
+
+BB BB BBB
+BB BB BBB
+         
+BB B BBBB
+BB B BBBB
+BB       
+   BBB BB
+BB BBB BB
+BB BBB BB
+BB BBB BB
+
+BBBB BB B
+BBBB BB B
+
+where B is building block
+and <space> is street. All
+streets must be connected
+and must be of width 1 as
+in this example.
+
+Here is an algorithm that
+will generate this type of
+map.
+
+1. Consider the entire grid to be
+my list of rectangles. Initially I
+have a list of one rectangle with
+dimensions MxN.
+
+2. For each rectangle, pick between
+any of its sides with length greater
+than 3 randomly.
+
+3. On that side, pick a random point to split that
+rectangle with a street. Don't put a street on the
+edge.
+
+4. Each new rectangle is added to my list.
+5. Repeat until there are no rectangles
+on my list with an edge longer than some
+given number L. In the above case, L=4.
+
+
+NOTE ON IDENTIFYING APPROPRIATE SHOP LOCATIONS IN MAP.
+
+A shop must have a door in front of it and street
+tile in front of that door. The door cannot have
+street tiles on either side of it. So I'm looking
+in my map for shapes like this:
+
+ Z
+XBX
+ B
+
+where Z is street tile, B is building block and X is not street. In the
+map above, there are 27 possible shop locations for a shop at first. At
+most, I can have 18 stores exist at the same time. For example:
+
+SD SD BSS
+BB BB BDD
+
+DB B BSDS
+SB B BDSD
+BB 
+   BDB BD
+BB BSB BS
+SD DSB BS
+BB BBB BD
+
+DDBB BB B
+SSSD DS B
+
+where <space> is street, B is building block, D is
+door and S is shop. Obviously, I don't have to use
+all these possible shop locations. So, if I want to
+auto-generate my maps, those are the algorithms I'd
+use. Map making is very tedious, so I will probably
+do this.
