@@ -1,16 +1,15 @@
 /**
-    void copy(unsigned size, double *array1, double *array2)                                                              copies array1 to array2.
-    void echoarray(unsigned r, unsigned c, double *array)                                                                displays array to stdout.
-    void scale(unsigned size, double scalar, double *array)                                                               multiplies array by scalar.
-    void sum(unsigned size, double *array1, double *array2, double *array3)                                                sums two arrays together.
-    void clear(unsigned size, double *array)                                                                             fills array with zeroes.
-    void randomfill(unsigned size, double *array, unsigned max)                                                          fills array with random unsigned ints.
-    void multiply(unsigned r1, unsigned c1, unsigned r2, unsigned c2, double *array1, double *array2, double *array3)      multiplies two arrays together
-    double determinant(unsigned size, double *array)                                                                      calculates determinant of array.
-    void inverse(unsigned size, double *array)                                                                           inverts a given array.
-    void transpose(unsigned rows, unsigned cols, double *array, double *trans)                                            transposes a given array, puts result in trans.
-    double dot(ROWS, &vector1[0][0], &vector2[0][0]);                                                                    returns dot product of two given vectors.
-
+    int copy(unsigned size, double *array1, double *array2)                                                             copies array1 to array2. returns amount copied.
+    int echoarray(unsigned r, unsigned c, double *array)                                                                displays array to stdout.
+    int scale(unsigned size, double scalar, double *array)                                                              multiplies array by scalar.
+    int sum(unsigned size, double *array1, double *array2, double *array3)                                              sums two arrays together.
+    int clear(unsigned size, double *array)                                                                             fills array with zeroes.
+    int randomfill(unsigned size, double *array, unsigned max)                                                          fills array with random unsigned ints.
+    int multiply(unsigned r1, unsigned c1, unsigned r2, unsigned c2, double *array1, double *array2, double *array3)    multiplies two arrays together
+    double determinant(unsigned size, double *array)                                                                    calculates determinant of array.
+    int inverse(unsigned size, double *array)                                                                           inverts a given array.
+    int transpose(unsigned rows, unsigned cols, double *array, double *trans)                                           transposes a given array, puts result in trans.
+    double dot(ROWS, &vector1[0][0], &vector2[0][0]);                                                                   returns dot product of two given vectors.
 */
 
 #include <stdlib.h>
@@ -38,6 +37,7 @@ int echoarray(unsigned r, unsigned c, double *array){
 
     for(i=0; i<r*c; i++){  printf("%.4f\t",  *(array+i)); if(!((i+1)%c)) puts(""); }
     puts("");
+    return i;
 }
 
 //call: scale(sizeof(a)/sizeof(a[0][0]), 4.5, &a[0][0]);
