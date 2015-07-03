@@ -1,0 +1,17 @@
+street names notes
+
+SUFFIXES
+street
+avenue
+lane
+place
+road
+drive
+
+
+PREFIXES
+
+Lots of surnames.
+most are like neighbourhood names with 'street' on the end.
+for example, Royal End Street, or Ferryhill terrace.
+

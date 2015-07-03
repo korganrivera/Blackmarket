@@ -8,10 +8,10 @@ Say I want to generate a map like the following:
 
 BB BB BBB
 BB BB BBB
-         
+
 BB B BBBB
 BB B BBBB
-BB       
+BB
    BBB BB
 BB BBB BB
 BB BBB BB
@@ -69,7 +69,7 @@ BB BB BDD
 
 DB B BSDS
 SB B BDSD
-BB 
+BB
    BDB BD
 BB BSB BS
 SD DSB BS
@@ -84,3 +84,43 @@ all these possible shop locations. So, if I want to
 auto-generate my maps, those are the algorithms I'd
 use. Map making is very tedious, so I will probably
 do this.
+
+NEIGHBOURHOODS
+
+After this city is created, neighbourhoods can be made.  THe program will pick out random rectangle areas of the map.
+Each area is given a neighbourhood name.  Each street should also be given a name, and if possible, each building should be given a number on that street.
+With this, the game can tell you what neighbourhood you're in.  You can also find your way around with addresses, or be given addresses to get to.
+Neighbourhood names and street names will be randomly generated from a separate file of name parts, much like dwarf fortress' character names.
+
+WEATHER
+
+Haven't decided if it's worth adding weather.  I can't see how that could be an important gameplay factor.  It's nice in GTA because you can see it.
+It's decoration, and that's not important yet.
+
+OTHER STRUCTURES
+I won't just have shops.  Other blocks could be other things.  Continuous connected blocks could become trees or water.  This would just break up monotony, but keep them as unwalkable areas.  There's no need for using height maps to determine biomes or anything.  But I would like to find an excuse to use height maps, or noise, if possible.  But yeah, everything I just mentioned is not game critical.
+
+IDEAS ON HOW SHOPS WILL WORK
+When you go into a shop, you will be greeted by the shopkeeper, and he can engage you in dialog, in which you have a choice of responses, like in Diablo or NVN.  The alternative is parsing commands and that's pointless hassle.  The dialog could in fact be skipped all together, but it would give me a vehicle for the transfer of information between user and shopkeepers.  In any case, you can buy and sell particular things from shopkeepers.  
+I'm guessing that shops have their range of ordinary goods, and then a hidden range of secret goods.  The amount of access you have to their hidden goods is proportional to how much the shopkeeper trusts you.  This might be connected to trades you do for him, or things you say.  Not every shopkeeper will have this hidden thing, and perhaps there are keepers who are in fact against this, and will rat you out if you seem to be looking for that sort of thing.  Also, I'd like spy-like keepers, who make you think they're into the dark stuff but in fact are trying to incriminate you.
+Anyway, in any case, the shops have to function.  They have a range of products that can be classed into traditional things like butcher, baker, medicine, whatever.  in each range is certain products that they each get from their suppliers.  Each item has a price that you buy it for, and you give the keeper's money.  You can sell shopkeepers items too.  Smart shop keepers will buy for less than they sell for.  Some games give items and age, or price it according to how used it is.  
+My idea is this.  Suppliers have costs that vary slightly on products.  Like a soft sine wave, some random thing.  Shopkeepers buy items from suppliers and try to sell it.  If they can sell it for a profit, they want to keep doing it.  The number of people who buy that thing changes over time and how much the public wants the thing.  a shopkeeper can adjust price accordingly to make the most cash.  This price he figures out is the same price he charges you for the item.  so you might buy an item, go back the next day to sell and make more money than you would have if you sold it the day before.  depends on the market.  However, the public has to be relatively small, so that if you buy a ton of something and sell it, then eventually the price will be driven down and you'll make less money, you have to be diverse, and watch what's going up and down.  That's the basics on how shops work.
+But do you need the normal stuff that the shops sell?  I can't think of a reason why you would.  This game needs a way for the user to earn money from the start, and something to spend money on.  This game doesn't have a character that needs armor, or food, or medicine, 
+
+I think eventually you could buy your own store, buy your own supplies, try to run a business.  
+I know that crafting has to be involved, pretty much copying the final fantasy crafting system.  that sort of rolls the shop and supplier into one thing.  part of that is you can sell products and/or services: making, repairing, customizing. 
+
+Suppliers should only be able to make stuff at a certain rate, but they also change their price based on demand.  
+
+
+QUESTS
+Shopkeepers and perhaps other npcs that trust you or need help, ask you to run errands, get things, find lost things, learn things, and so on, like the basic stuff in NVN.  basically, you're spending your TIME to help others profit somehow.  you get paid in some resource or something.  You can use this to eventually get access to an elevated system of aquisition, like an incremental game.  This second tier is probably after having learned who needs what.  you can buy and sell and move things around.  next level might be moves in the undermarket.  then you learn of the risks, and who's your threat.  not sure what comes after that.  If there's a story, it leads to you becoming powerful enough to come toe-to-toe with government powers, either in some end boss confrontation, or just a constant war with higher risks and rewards, or becoming partners with their corruption, and turning on the npcs or other players if there are any.
+
+RUMOURS
+There has to be some way that information can move around.  This is also based on a trust system, and characters within each other's trust circles will share information if they meet.  if an npc is a spy shopkeeper and he finds out you're an enemy, he will tell agents/cops who visit.  those cops will tell other cops.  the cop world's rating of you will change.  it goes the other way. do a good deed for someone on the blackmarket, and your rep goes up by rumor with others in his network.  so each nps needs a network of other npcs.  i can either actually simulate movement, or just model it.  Perhapsyour rep goes up with him, and then immediately your rep alters with other peopl ein his network proportional to how close they are with him.  Or it could happen more slowly so as to simulate him meeting others shortly after his dealings with you.
+
+NETWORKING
+Eventually, if you trade well, you'll be in good standing with people you trade with, essentially being part of their network. perhaps actually that's part of it: if your rep is high enough with some group, you are considered part of them, or asked to join.  after that, you can be promoted to higher in their chain or something.  it can lead to the centre of the game if there is one, and on that track you'd learn particular set of skills.  i don't know.
+
+INVENTORY
+The user should be able to carry items, even though right now I don't know what he'd need.  I suppose he needs someone to store what he buys.  He could begin carrying them in a bag, different sized bags, he could rent storage space, he could buy storage space, the rental space and storage space could have different security levels, different strength attributes, and size.  
