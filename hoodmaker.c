@@ -14,8 +14,7 @@
 
 #define HEIGHT 60
 #define WIDTH 60
-
-#define HOODSIZE 5      //  maximum height and width of a neighbourhood.
+#define HOODSIZE 5      //  minimum height and width of a neighbourhood.
 
 void ushow(unsigned * map, unsigned height, unsigned width);    //  displays an array of unsigneds.
 void hoodmaker(unsigned *nhood, unsigned x1, unsigned y1, unsigned x2, unsigned y2, unsigned height, unsigned width, unsigned nsize);
@@ -41,7 +40,7 @@ void ushow(unsigned * map, unsigned height, unsigned width){
 
     for(i=0; i<height; i++){
         for(j=0; j<width; j++){
-            if(*(map+i*width+j)<10) printf("  %u", *(map+i*width+j));
+            if(*(map+i*width+j)<10) printf("  %u", *(map+i*width+j));   //  this is pretty ugly formatting stuff :/
             else printf(" %u", *(map+i*width+j));
         }
         putchar('\n');
@@ -58,14 +57,9 @@ void hoodmaker(unsigned *nhood, unsigned x1, unsigned y1, unsigned x2, unsigned 
     rectheight = x2-x1+1;
     rectwidth = y2-y1+1;
 
-    //  if both sides are too small to be split, return.
-    if(rectheight<2*nsize && rectwidth<2*nsize) return;
-
-    //  if both sides are big enough to split, choose between them randomly.
-    if(rectheight>=2*nsize && rectwidth>=2*nsize) vsplitflag = rand()%2;
-
-    //  if only rectheight is big enough to be split, choose that.  Otherwise rectwidth will be split as default.
-    else if(rectheight>=2*nsize) vsplitflag = 1;
+    if(rectheight<2*nsize && rectwidth<2*nsize) return;                     //  if both sides are too small to be split, return.
+    if(rectheight>=2*nsize && rectwidth>=2*nsize) vsplitflag = rand()%2;    //  if both sides are big enough to split, choose between them randomly.
+    else if(rectheight>=2*nsize) vsplitflag = 1;                            //  if only rectheight is big enough to be split, choose that.
 
     if(vsplitflag){
 
@@ -77,11 +71,10 @@ void hoodmaker(unsigned *nhood, unsigned x1, unsigned y1, unsigned x2, unsigned 
         p = rand()%(b-a+1)+a;
 
         //  fill the chosen rectangle with the current hoodindex.
-        for(i=x1; i<p; i++){
-            for(j=y1; j<=y2; j++){
+        for(i=x1; i<p; i++)
+            for(j=y1; j<=y2; j++)
                 *(nhood+i*width+j) = hoodindex;
-            }
-        }
+
         hoodindex++;
 
         //  call hoodmaker with each new separate rectangle.
@@ -99,11 +92,10 @@ void hoodmaker(unsigned *nhood, unsigned x1, unsigned y1, unsigned x2, unsigned 
         p = rand()%(b-a+1)+a;
 
         //  fill the chosen rectangle with the current hoodindex.
-        for(i=x1; i<=x2; i++){
-            for(j=y1; j<p; j++){
+        for(i=x1; i<=x2; i++)
+            for(j=y1; j<p; j++)
                 *(nhood+i*width+j) = hoodindex;
-            }
-        }
+
         hoodindex++;
 
         //  call hoodmaker with each new separate rectangle.
