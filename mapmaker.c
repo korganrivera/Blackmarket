@@ -1,7 +1,7 @@
 /*
     Map generator for Blackmarket. Generates Streets and blocks.
     start:  2015.6.23.18:50
-    end:    2015.6.23.23:1q     (includes about an hour of just playing with it.)
+    end:    2015.6.23.23:11     (includes about an hour of just playing with it.)
 
     start:  2015.6.23~15:00     Adding a shopmaker function.
             2015.6.23.20:49     It works!  Took me about 5 hours.  The function identifies all the potential shop
@@ -24,7 +24,18 @@
                                 randomly too. Then I write my map copy of doors and shops on top of the original
                                 map, and it's done!
 
-    note: hcount and vcount are globals here that are used in streetmaker.  They need to be taken out, they're just for debug right now.
+                                note: hcount and vcount are globals here that are used in streetmaker.
+                                They need to be taken out, they're just for debug right now.
+
+            2015.9.10.22:26     adding hoodmaker function.  Doesn't work yet.  Basically using most of streetmaker().
+            2015.9.13.02:41     added hoodmaker function.
+                                Next I need to add a function that reads my prefixes and suffixes for hood names from a file,
+                                builds a name randomly, and then assigns it to a neighbourhood index.  I can use an array of string
+                                pointers for this and malloc strings of the right size, though that's ugly.  I'm not sure yet.
+            2015.9.15.14:12     I was going to add a function to give streets street names, but I figure it's much easier to pass
+                                the street name map to streetmaker, and let it name streets as it makes them.  Let's try that.
+                                Yeah that works.  Added a shitty while(1) to walk around the city.  I need to import prefixes and
+                                suffixes now for street and neighbourhood names.  Prob use my CodeEval code here somewhere.
 */
 
 #include <stdio.h>
@@ -36,36 +47,141 @@
 #define DOOR 2
 #define BLOCK 3
 
-#define HEIGHT 60
-#define WIDTH  80
+#define HEIGHT 30
+#define WIDTH  40
 
-#define MAXBLOCKSIZE 10
-#define SHOPCHANCE 40
+#define MAXBLOCKSIZE 10                     //  blocks are the BLOCKS that aren't streets.  This is the maximum length or width a block can be although it doesn't really work that way.
+#define SHOPCHANCE 40                       //  chance that a viable shop position actually becomes a shop.
+#define HOODSIZE 10                         //  minimum height and width of a neighbourhood.
 
-void streetmaker(unsigned x1,unsigned y1,unsigned x2,unsigned y2, char *map, unsigned blocksize, unsigned widthofmainmap);
+void streetmaker(unsigned x1,unsigned y1,unsigned x2,unsigned y2, char *map, unsigned blocksize, unsigned widthofmainmap, unsigned *stindexmap);
 void show(unsigned r, unsigned c, char *map);
+void ushow(unsigned *map, unsigned height, unsigned width);                //  displays an array of unsigneds, for hoodmap.
 void shopmaker(unsigned height, unsigned width, char *map, char chance);
+void hoodmaker(unsigned *nhood, unsigned x1, unsigned y1, unsigned x2, unsigned y2, unsigned nsize);
 
-unsigned hcount;
+unsigned hcount;                            //  used to balance grid splitting in streetmaker function.
 unsigned vcount;
+unsigned hoodindex=1;                       //  holds the hood number being used as neighbourhoods are being generated.
+unsigned streetindex=1;
+
+typedef struct _user {
+    unsigned position;       //  index of map where user character is.
+}user;
 
 int main(void){
-    unsigned i, j;
+    unsigned i, j, *nhood, *stindexmap;
     char *map;
+    user player;
+    char input;
 
     srand (time(NULL));
 
-    if((map = malloc(HEIGHT*WIDTH)) == NULL){ puts("\nmain(): malloc failed."); exit(1); }      //  malloc space for map.
-    for(i=0; i<WIDTH*HEIGHT; i++) *(map+i) = BLOCK;                                             //  initialise map with all blocks.
-    hcount=vcount=0;                                                                            //  initialise horizontal and vertical cut counters.
-    streetmaker(0,0,HEIGHT-1, WIDTH-1, map, MAXBLOCKSIZE, WIDTH);                                          //  build streets.
-    //printf("\nSTREETMAKER %u x %u map\n\n", HEIGHT, WIDTH);                                     //  display  city.
-    //show(HEIGHT, WIDTH, map);
-    //printf("\n\nhcount=%u, vcount=%u\n\n", hcount, vcount);                                     //  display number of horizontal and vertical cuts, just to check.
+    if((map = malloc(HEIGHT*WIDTH)) == NULL){ puts("\nmain(): malloc failed."); exit(1); }                          //  malloc space for map.
+    if((nhood = malloc(HEIGHT*WIDTH*sizeof(unsigned))) == NULL){ puts("\nmain(): malloc failed."); exit(1); }       //  malloc space for neighbourhood map.
+    if((stindexmap = malloc(HEIGHT*WIDTH*sizeof(unsigned))) == NULL){ puts("\nmain(): malloc failed."); exit(1); }  //  malloc space for street name map.
 
-    shopmaker(HEIGHT, WIDTH, map, SHOPCHANCE);
+    for(i=0; i<WIDTH*HEIGHT; i++) *(map+i) = BLOCK;                                             //  initialise map to contain only blocks.
+    for(i=0; i<WIDTH*HEIGHT; i++) *(stindexmap+i) = 0;                                          //  initialise street index map to contain only zeroes.
+                                                                                                //  have to do that since it's filled with garbage.
+                                                                                                //  but why don't I do this with nhood?
+    for(i=0; i<WIDTH*HEIGHT; i++) *(nhood+i) = 0;
+
+    hcount=vcount=0;                                                                            //  initialising.
+
+    streetmaker(0,0,HEIGHT-1, WIDTH-1, map, MAXBLOCKSIZE, WIDTH, stindexmap);                   //  build streets, and index them.
+
+    shopmaker(HEIGHT, WIDTH, map, SHOPCHANCE);                                                  //  find possible shop locations and place them.
     puts("\n\nafter returning from shopmaker:\n");
     show(HEIGHT, WIDTH, map);
+
+    hoodmaker(nhood, 0, 0, HEIGHT-1, WIDTH-1, HOODSIZE);                                        //  build the hood map.
+    puts("Here is the complete nhood map:");
+    ushow(nhood, HEIGHT, WIDTH);
+
+    puts("Here is the complete street index map:");
+    ushow(stindexmap, HEIGHT, WIDTH);
+
+    //  DO THIS NEXT.
+    //  Here is where I get the prefix list for naming things.
+    //  open prefix file, count # of lines (x), malloc space for x char pointers, rewind,
+    //  measure length of first string, malloc space for that, read it in, go to next string,
+    //  repeat until end of file. close file.  Do similar procedure for suffixes.
+    //  once streets and neighbourhoods have been given their names, free the arrays.
+    //  saves a ton of space :)
+
+
+//  -----------v-------big ugly game loop, just for testing-------------v-----------------
+
+    //  put user in random place.  actually, just put him on the first piece of street from top left.  do this better later.
+    for(i=0; i<HEIGHT*WIDTH; i++) if(*(map+i)==STREET) break;
+    player.position = i;
+
+    while(1){
+
+        puts("\ncell\tstreet\thood\toptions");
+        printf("%u\t%u\t%u\tx ", player.position, *(stindexmap+player.position), *(nhood+player.position));
+
+        if(player.position/WIDTH){
+            if(*(map+player.position-WIDTH)==STREET) printf("n ");
+        }
+
+        if(player.position/WIDTH!=HEIGHT-1){
+            if(*(map+player.position+WIDTH)==STREET) printf("s ");
+        }
+
+        if(player.position%WIDTH){
+            if(*(map+player.position-1)==STREET) printf("w ");
+        }
+
+        if(player.position%WIDTH!=WIDTH-1){
+            if(*(map+player.position+1)==STREET) printf("e");
+        }
+
+        if(*(map+player.position)==SHOP) puts("\nYou are in a shop.");
+        else if(*(map+player.position)==STREET) puts("\nYou are on the street.");
+
+
+        printf("\n: ");
+        input=getchar();
+        fflush(stdin);
+
+        if(input=='x') exit(0);
+
+        if(input=='n'){
+            if(*(map+player.position-WIDTH)==DOOR) player.position -= 2*WIDTH;
+            else if(player.position/WIDTH==0) puts("\nyou can't go any further north.");
+            else if(*(map+player.position-WIDTH)!=STREET) puts("\nthere's a building there.");
+            else player.position -= WIDTH;
+        }
+
+        if(input=='s'){
+            if(*(map+player.position+WIDTH)==DOOR) player.position += 2*WIDTH;
+            else if(player.position/WIDTH==HEIGHT-1) puts("\nyou can't go any further south.");
+            else if(*(map+player.position+WIDTH)!=STREET) puts("\nthere's a building there.");
+            else player.position += WIDTH;
+        }
+
+        if(input=='w'){
+            if(*(map+player.position-1)==DOOR) player.position -= 2;
+            else if(player.position%WIDTH==0) puts("\nyou can't go any further west.");
+            else if(*(map+player.position-1)!=STREET) puts("\nthere's a building there.");
+            else player.position -= 1;
+        }
+
+        if(input=='e'){
+            if(*(map+player.position+1)==DOOR) player.position += 2;
+            else if(player.position%WIDTH==WIDTH-1) puts("\nyou can't go any further east.");
+            else if(*(map+player.position+1)!=STREET) puts("\nthere's a building there.");
+            else player.position += 1;
+        }
+    }
+
+//  ----------^--------big ugly game loop, just for testing------------^------------------
+
+    free(map);
+    free(nhood);
+    free(stindexmap);
 }
 
 
@@ -73,7 +189,8 @@ int main(void){
 //  The function is called recursively with each rectangle, until no rectangle side is larger than blocksize.
 //  x1,y1 are top-left cell of rectangle, x2,y2 are bottom-right cell.  map is pointer to the array. blocksize is maximum size
 //  that a rectangle's side can be.  widthofmainmap is same as x2 on the first call.
-void streetmaker(unsigned x1,unsigned y1,unsigned x2,unsigned y2, char *map, unsigned blocksize, unsigned widthofmainmap){
+//  This function also gives streets an index number so I can name it later.
+void streetmaker(unsigned x1,unsigned y1,unsigned x2,unsigned y2, char *map, unsigned blocksize, unsigned widthofmainmap, unsigned *stindexmap){
     unsigned vside, hside, p, i;
     char vsideflag=0;
 
@@ -97,16 +214,24 @@ void streetmaker(unsigned x1,unsigned y1,unsigned x2,unsigned y2, char *map, uns
     if(vsideflag){
         vcount++;
         p = rand()%(vside-2)+1;
-        for(i=y1; i<=y2; i++) *(map+(p+x1)*widthofmainmap+i) = STREET;
-        streetmaker(x1, y1, p-1+x1, y2, map, blocksize, widthofmainmap);
-        streetmaker(p+1+x1, y1, x2, y2, map, blocksize, widthofmainmap);
+        for(i=y1; i<=y2; i++) {
+                *(map+(p+x1)*widthofmainmap+i) = STREET;                //  mark that cell as a street.
+                *(stindexmap+(p+x1)*widthofmainmap+i) = streetindex;    //  give that cell a street index number on the street index map.
+        }
+        streetindex++;                                                  //  increment index to give the next street a new name/index.
+        streetmaker(x1, y1, p-1+x1, y2, map, blocksize, widthofmainmap, stindexmap);
+        streetmaker(p+1+x1, y1, x2, y2, map, blocksize, widthofmainmap, stindexmap);
     }
     else{
         hcount++;
         p = rand()%(hside-2)+1;
-        for(i=x1; i<=x2; i++) *(map+i*widthofmainmap+y1+p) = STREET;
-        streetmaker(x1, y1, x2, p-1+y1, map, blocksize, widthofmainmap);
-        streetmaker(x1, p+1+y1, x2, y2, map, blocksize, widthofmainmap);
+        for(i=x1; i<=x2; i++){
+                *(map+i*widthofmainmap+y1+p) = STREET;
+                *(stindexmap+i*widthofmainmap+y1+p) = streetindex;
+        }
+        streetindex++;
+        streetmaker(x1, y1, x2, p-1+y1, map, blocksize, widthofmainmap, stindexmap);
+        streetmaker(x1, p+1+y1, x2, y2, map, blocksize, widthofmainmap, stindexmap);
     }
 }
 
@@ -116,6 +241,7 @@ void show(unsigned r, unsigned c, char *map){
 
     for(i=0; i<size; i++){
             if(!(i%c)) putchar(' ');
+            putchar(' ');
         if(*(map+i)==BLOCK) putchar(178);
         else if(*(map+i)==STREET) putchar(' ');
         else if(*(map+i)==SHOP) putchar('$');
@@ -294,3 +420,76 @@ void shopmaker(unsigned height, unsigned width, char *map, char chance){
     free(mymap);
     free(potentialshops);
 }
+
+void hoodmaker(unsigned *nhood, unsigned x1, unsigned y1, unsigned x2, unsigned y2, unsigned nsize){
+    unsigned rectheight, rectwidth;     //  dimensions of the current rectangle.
+    unsigned p;                         //  random position on whichever side.
+    char vsplitflag=0;                  //  choice of side to split.  if 1, map will be split from left to right.
+    unsigned i,j,a,b;
+
+    rectheight = x2-x1+1;
+    rectwidth = y2-y1+1;
+
+    if(rectheight<2*nsize && rectwidth<2*nsize) return;                     //  if both sides are too small to be split, return.
+    if(rectheight>=2*nsize && rectwidth>=2*nsize) vsplitflag = rand()%2;    //  if both sides are big enough to split, choose between them randomly.
+    else if(rectheight>=2*nsize) vsplitflag = 1;                            //  if only rectheight is big enough to be split, choose that.
+
+    if(vsplitflag){
+
+        //  first I need to find the bounds.
+        a = x1+nsize;
+        b = x2-nsize+1;
+
+        //  choose a random number between a and b.
+        p = rand()%(b-a+1)+a;
+
+        //  fill the chosen rectangle with the current hoodindex.
+        for(i=x1; i<p; i++)
+            for(j=y1; j<=y2; j++)
+                *(nhood+i*WIDTH+j) = hoodindex;
+
+        hoodindex++;
+
+        //  call hoodmaker with each new separate rectangle.
+        hoodmaker(nhood, x1, y1, p-1, y2, HOODSIZE);
+        hoodmaker(nhood, p, y1, x2, y2, HOODSIZE);
+    }
+
+    else{
+
+        //  calculate the bounds.
+        a = y1+nsize;
+        b = y2-nsize+1;
+
+        //  choose a random number between a and b.
+        p = rand()%(b-a+1)+a;
+
+        //  fill the chosen rectangle with the current hoodindex.
+        for(i=x1; i<=x2; i++)
+            for(j=y1; j<p; j++)
+                *(nhood+i*WIDTH+j) = hoodindex;
+
+        hoodindex++;
+
+        //  call hoodmaker with each new separate rectangle.
+        hoodmaker(nhood, x1, y1, x2, p-1, HOODSIZE);
+        hoodmaker(nhood, x1, p, x2, y2, HOODSIZE);
+    }
+}
+
+
+void ushow(unsigned * map, unsigned height, unsigned width){
+    unsigned i, j;
+
+    for(i=0; i<height; i++){
+        putchar(' ');
+        for(j=0; j<width; j++){
+            if(*(map+i*width+j)<10) printf(" %u", *(map+i*width+j));   //  this is pretty ugly formatting stuff :/
+            else printf("%u", *(map+i*width+j));
+        }
+
+        putchar('\n');
+    }
+}
+
+
