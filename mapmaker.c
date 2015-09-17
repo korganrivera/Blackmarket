@@ -36,11 +36,22 @@
                                 the street name map to streetmaker, and let it name streets as it makes them.  Let's try that.
                                 Yeah that works.  Added a shitty while(1) to walk around the city.  I need to import prefixes and
                                 suffixes now for street and neighbourhood names.  Prob use my CodeEval code here somewhere.
+            2015.9.16.13:32     Aw yeah! I can now read the prefix suffix files, with my badass filereader function!  I used triple
+                                pointers.  I malloced everything so I only use the bare minimum of memory to hold an array of strings. :D
+                                Now I have to do the same thing for only the strings I need, then free the other stuff.
+            2015.9.16.15:32     Street names are a litle trickier.  I can't just stick 'street' in front of a hood-style name, because it
+                                gets monotonous.  I'll use either 1) prefix+street, 2) suffix+street, 3) prefix+suffix+street.
+                                So I need another array of street suffixes.
+            2015.9.17.16:02     Okay now streets have names!  The game can tell me what street I'm on and what hood I'm in.
+                                Now I need to add street numbers.
+            2015.9.17.16:55     Made street names and hood names proper, by capitalising the first letter accordingly.  Still need street numbers.
 */
 
 #include <stdio.h>
 #include <time.h>
 #include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
 
 #define STREET 0
 #define SHOP 1
@@ -48,7 +59,7 @@
 #define BLOCK 3
 
 #define HEIGHT 30
-#define WIDTH  40
+#define WIDTH  80
 
 #define MAXBLOCKSIZE 10                     //  blocks are the BLOCKS that aren't streets.  This is the maximum length or width a block can be although it doesn't really work that way.
 #define SHOPCHANCE 40                       //  chance that a viable shop position actually becomes a shop.
@@ -59,6 +70,9 @@ void show(unsigned r, unsigned c, char *map);
 void ushow(unsigned *map, unsigned height, unsigned width);                //  displays an array of unsigneds, for hoodmap.
 void shopmaker(unsigned height, unsigned width, char *map, char chance);
 void hoodmaker(unsigned *nhood, unsigned x1, unsigned y1, unsigned x2, unsigned y2, unsigned nsize);
+unsigned filereader(char *fname, char ***array);
+void proper(char *str);                     //  capitalises the first letter of given string.
+void unproper(char *str);                   //  lowers the case of the first letter of given string.
 
 unsigned hcount;                            //  used to balance grid splitting in streetmaker function.
 unsigned vcount;
@@ -66,49 +80,180 @@ unsigned hoodindex=1;                       //  holds the hood number being used
 unsigned streetindex=1;
 
 typedef struct _user {
-    unsigned position;       //  index of map where user character is.
+    unsigned position;                      //  index of map where user character is.
 }user;
 
 int main(void){
-    unsigned i, j, *nhood, *stindexmap;
+    unsigned len, a, b, c, i, j, r, *nhood, *stindexmap;
     char *map;
     user player;
     char input;
 
-    srand (time(NULL));
+    //  variables for reading names from files.
+    FILE *pre, *su;
+    unsigned totalprefixes, totalsuffixes, totalstreetsuffs;
+    char **prefixes, **suffixes;            //  array of strings; prefixes and suffixes.
+    char **streetsuffs;                     //  street suffixes.
+    char **hoodnames;
+    char **streetnames;
 
-    if((map = malloc(HEIGHT*WIDTH)) == NULL){ puts("\nmain(): malloc failed."); exit(1); }                          //  malloc space for map.
-    if((nhood = malloc(HEIGHT*WIDTH*sizeof(unsigned))) == NULL){ puts("\nmain(): malloc failed."); exit(1); }       //  malloc space for neighbourhood map.
+
+    srand (time(NULL));
+    hcount=vcount=0;
+
+
+    if((map = malloc(HEIGHT*WIDTH)) == NULL){ puts("\nmain(): malloc failed."); exit(1); }                          //  malloc space for main map.
+    if((nhood = malloc(HEIGHT*WIDTH*sizeof(unsigned))) == NULL){ puts("\nmain(): malloc failed."); exit(1); }       //  malloc space for hood map.
     if((stindexmap = malloc(HEIGHT*WIDTH*sizeof(unsigned))) == NULL){ puts("\nmain(): malloc failed."); exit(1); }  //  malloc space for street name map.
 
-    for(i=0; i<WIDTH*HEIGHT; i++) *(map+i) = BLOCK;                                             //  initialise map to contain only blocks.
+    for(i=0; i<WIDTH*HEIGHT; i++) *(map+i) = BLOCK;                                             //  initialise main map to contain only blocks.
     for(i=0; i<WIDTH*HEIGHT; i++) *(stindexmap+i) = 0;                                          //  initialise street index map to contain only zeroes.
-                                                                                                //  have to do that since it's filled with garbage.
-                                                                                                //  but why don't I do this with nhood?
-    for(i=0; i<WIDTH*HEIGHT; i++) *(nhood+i) = 0;
+    for(i=0; i<WIDTH*HEIGHT; i++) *(nhood+i) = 0;                                               //  same for nhood map.
 
-    hcount=vcount=0;                                                                            //  initialising.
 
-    streetmaker(0,0,HEIGHT-1, WIDTH-1, map, MAXBLOCKSIZE, WIDTH, stindexmap);                   //  build streets, and index them.
+    streetmaker(0,0,HEIGHT-1, WIDTH-1, map, MAXBLOCKSIZE, WIDTH, stindexmap);                   //  build streets, index them. this function sets streetindex.
+
+    //  since streets aren't numbered zero, I have to reduce streetindex by one here.
+    streetindex--;
 
     shopmaker(HEIGHT, WIDTH, map, SHOPCHANCE);                                                  //  find possible shop locations and place them.
-    puts("\n\nafter returning from shopmaker:\n");
+
+    puts("\n\nmap: streets, shops, doors, blocks:\n");
     show(HEIGHT, WIDTH, map);
 
-    hoodmaker(nhood, 0, 0, HEIGHT-1, WIDTH-1, HOODSIZE);                                        //  build the hood map.
-    puts("Here is the complete nhood map:");
+    hoodmaker(nhood, 0, 0, HEIGHT-1, WIDTH-1, HOODSIZE);                                        //  build the hood map. this function sets hoodindex.
+
+    printf("\n# streets: %u, #hoods: %u", streetindex, hoodindex);
+
+
+    puts("\nhood map:\n");
     ushow(nhood, HEIGHT, WIDTH);
 
-    puts("Here is the complete street index map:");
+    puts("\nstreet index map:\n");
     ushow(stindexmap, HEIGHT, WIDTH);
 
-    //  DO THIS NEXT.
-    //  Here is where I get the prefix list for naming things.
-    //  open prefix file, count # of lines (x), malloc space for x char pointers, rewind,
-    //  measure length of first string, malloc space for that, read it in, go to next string,
-    //  repeat until end of file. close file.  Do similar procedure for suffixes.
-    //  once streets and neighbourhoods have been given their names, free the arrays.
-    //  saves a ton of space :)
+
+    //  read list of prefixes, suffixes, and street types from text files.
+    //  these are used to create hood and street names.
+    totalprefixes = filereader("prefixes.txt", &prefixes);
+    totalsuffixes = filereader("suffixes.txt", &suffixes);
+    totalstreetsuffs = filereader("streetsuffixes.txt", &streetsuffs);
+
+    //  First, create hood names.
+    //  create an array to hold hood names.
+    if((hoodnames = malloc(hoodindex*sizeof(char*))) == NULL){ puts("\nmalloc failed."); exit(1); } //  malloc space for 'hoodindex' character pointers.
+
+    //  generate a name for each hood, mallocing space for each name.  This keeps everything trim. :)
+    for(i=0; i<hoodindex; i++){
+
+        //  get two randoms, to choose prefix and suffix.
+        a = rand()%totalprefixes;
+        b = rand()%totalsuffixes;
+
+        //  figure how much space is needed for prefix, space, suffix, and null terminator.
+        len = strlen(prefixes[a]) + strlen(suffixes[b]) + 2;
+
+        //  make space for the hood name itself.
+        if((*(hoodnames+i) = malloc(len)) == NULL) { puts("\nmalloc failed."); exit(1); }
+
+        //  make the name parts proper.
+        proper(prefixes[a]);
+        proper(suffixes[b]);
+
+        //  copy the prefix, space, and suffix into it's new home. strcat automatically null terminates.
+        strcpy(*(hoodnames+i), prefixes[a]);
+        strcat(*(hoodnames+i), " ");
+        strcat(*(hoodnames+i), suffixes[b]);
+    }
+
+
+    //  Now create street names.  same process as above, probably turn this into a function later.
+    //  create an array to hold street names.
+    if((streetnames = malloc(streetindex*sizeof(char*))) == NULL){ puts("\nmalloc failed."); exit(1); } //  malloc space for 'streetindex' character pointers.
+
+    for(i=0; i<streetindex; i++){
+
+        //  for street names, I'm going to use prefix and/or suffix, and street type.
+        a = rand()%totalprefixes;
+        b = rand()%totalsuffixes;
+        c = rand()%totalstreetsuffs;
+
+        //  choose between only suffix, only prefix, or both.
+        r = rand()%3;
+
+        //  if r==0, use all three parts in the name.  The prefix and suffix are concatenated to make one word.
+        if(!r){
+
+            //  figure how much space is needed for prefix, suffix, space, and null terminator.
+            len = strlen(prefixes[a]) + strlen(suffixes[b]) + strlen(streetsuffs[c]) + 3;
+
+            //  make space for the street name.
+            if((*(streetnames+i) = malloc(len)) == NULL) { puts("\nmalloc failed."); exit(1); } //  make space for this string.
+
+            //  make the name parts proper.
+            proper(prefixes[a]);
+            unproper(suffixes[b]);
+            proper(streetsuffs[c]);
+
+            strcpy(*(streetnames+i), prefixes[a]);
+            strcat(*(streetnames+i), suffixes[b]);
+            strcat(*(streetnames+i), " ");
+            strcat(*(streetnames+i), streetsuffs[c]);
+        }
+
+        //  if r==1, only use a prefix and a street type.
+        else if(r==1){
+
+            //  figure how much space is needed for prefix, space, and null terminator.
+            len = strlen(prefixes[a]) + strlen(streetsuffs[c]) + 2;
+
+            //  make space for the street name.
+            if((*(streetnames+i) = malloc(len)) == NULL) { puts("\nmalloc failed."); exit(1); } //  make space for this string.
+
+            //  make the name parts proper.
+            proper(prefixes[a]);
+            proper(streetsuffs[c]);
+
+            strcpy(*(streetnames+i), prefixes[a]);
+            strcat(*(streetnames+i), " ");
+            strcat(*(streetnames+i), streetsuffs[c]);
+        }
+
+        //  if r==2, only use a suffix and a street type.
+        else{
+            //  figure how much space is needed for prefix, suffix, space, and null terminator.
+            len = strlen(suffixes[b]) + strlen(streetsuffs[c]) + 2;
+
+            //  make space for the street name.
+            if((*(streetnames+i) = malloc(len)) == NULL) { puts("\nmalloc failed."); exit(1); } //  make space for this string.
+
+            //  make the name parts proper.
+            proper(suffixes[b]);
+            proper(streetsuffs[c]);
+
+            strcpy(*(streetnames+i), suffixes[b]);
+            strcat(*(streetnames+i), " ");
+            strcat(*(streetnames+i), streetsuffs[c]);
+        }
+    }
+
+    puts("\nhood names for this map:");
+    for(i=0; i<hoodindex; i++){
+        printf("\n%s", *(hoodnames+i));
+    }
+
+
+    puts("\n\nstreet names for this map:");
+    for(i=0; i<streetindex; i++){
+        printf("\n%s", *(streetnames+i));
+    }
+
+
+
+
+
+////////////////////
+
 
 
 //  -----------v-------big ugly game loop, just for testing-------------v-----------------
@@ -119,8 +264,10 @@ int main(void){
 
     while(1){
 
-        puts("\ncell\tstreet\thood\toptions");
-        printf("%u\t%u\t%u\tx ", player.position, *(stindexmap+player.position), *(nhood+player.position));
+        puts("\n");
+        if(*(map+player.position)==STREET) printf("\n%s, ", streetnames[stindexmap[player.position]-1]);
+        printf("%s", hoodnames[nhood[player.position]]);
+        printf("\noptions: x ");
 
         if(player.position/WIDTH){
             if(*(map+player.position-WIDTH)==STREET) printf("n ");
@@ -140,7 +287,6 @@ int main(void){
 
         if(*(map+player.position)==SHOP) puts("\nYou are in a shop.");
         else if(*(map+player.position)==STREET) puts("\nYou are on the street.");
-
 
         printf("\n: ");
         input=getchar();
@@ -182,6 +328,8 @@ int main(void){
     free(map);
     free(nhood);
     free(stindexmap);
+    free(prefixes);
+    free(suffixes);
 }
 
 
@@ -493,3 +641,41 @@ void ushow(unsigned * map, unsigned height, unsigned width){
 }
 
 
+
+unsigned filereader(char *fname, char ***array){
+    unsigned n, i, len;
+    char c, buffer[50];
+    FILE *fp;
+
+    if((fp=fopen(fname,"r")) == NULL){ printf("\ncan't open \'%s\'.", fname); exit(1); }//  open file in text mode.
+
+    if(fgetc(fp)==EOF) { printf("\n\'%s\' is empty.", fname); exit(1); }                //  if empty file, exit.
+    rewind(fp);
+
+    n=i=0;                                                                              //  counts lines in file. file has to end with a newline!
+    while((c=fgetc(fp))!=EOF) if(c=='\n') n++;                                          //  add something later to correct files if necessary.
+    rewind(fp);
+
+    if((*array = malloc(n*sizeof(char*))) == NULL){ puts("\nmalloc failed."); exit(1); }//  malloc an array of n char pointers.
+
+    while(EOF != fscanf(fp, "%s\n", buffer)){                                           //  read str into buffer, malloc for it, copy it over, repeat.
+        len = strlen(buffer);
+        if((*(*(array)+i) = malloc(len)) == NULL){ puts("\nmalloc failed."); exit(1); } //  make space for this string.
+        strcpy(*(*(array)+i++), buffer);                                                //  move the string I read into the space I just made.
+    }
+
+    fclose(fp);
+    return n;
+}
+
+
+void proper(char *str){
+    if(str==NULL) return;
+    *str = toupper(*str);
+}
+
+
+void unproper(char *str){
+    if(str==NULL) return;
+    *str = tolower(*str);
+}
