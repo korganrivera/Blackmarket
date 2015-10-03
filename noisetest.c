@@ -18,14 +18,15 @@
 /*
     Takes an array, index of its bounds, level, and min and max values that determine the range of values,
     and puts values into the array using the mid-displacement routine.  On first call, level should be 1.
-    e.g. func(array1, 0, 16, 1, -5.5, 15.0)
+    e.g. noise(array1, 0, 16, 1, -5.5, 15.0)
+    The size of the array MUST be 2^n+1.
 */
-void func(double *array, unsigned start, unsigned end, unsigned level, double min, double max){
+void noise(double *array, unsigned start, unsigned end, unsigned level, double min, double max){
     double avg, dis;
     unsigned mid;
     if(end == start+1) return;
 
-    if(min>max) {printf("\nfunc(): min is greater than max. array not complete."); return; }
+    if(min>max) {printf("\nnoise(): min is greater than max. array not complete."); return; }
 
     avg = (*(array+start)+*(array+end))/2.0;
     mid = (start+end)/2;
@@ -34,8 +35,8 @@ void func(double *array, unsigned start, unsigned end, unsigned level, double mi
 
     *(array+mid) = avg+dis;
 
-    func(array, start, mid, level+1, min, max);
-    func(array, mid, end, level+1, min, max);
+    noise(array, start, mid, level+1, min, max);
+    noise(array, mid, end, level+1, min, max);
 }
 
 
@@ -55,7 +56,7 @@ int main(void){
     //array[0] = (double)rand() / (double)RAND_MAX * (MAX - MIN) + MIN;
     //array[LEN-1] = (double)rand() / (double)RAND_MAX * (MAX - MIN) + MIN;
 
-    func(array, 0, LEN-1, 1, MIN, MAX);
+    noise(array, 0, LEN-1, 1, MIN, MAX);
 
     //  display to check.
     for(i=0; i<LEN; i++) printf("%u,%.3f\n", i, array[i]);
