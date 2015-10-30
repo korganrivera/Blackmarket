@@ -7,10 +7,13 @@ upper
 lower
 spring
 summer
+blunder
 sunny
 hazle
 flesh
 pig
+hog
+boar
 dog
 duck
 bear
@@ -33,7 +36,11 @@ salt
 frog
 tangle
 high
+finch
+hens
 low
+port
+barrow
 crafters
 tanners
 crook
@@ -41,6 +48,10 @@ baker
 broker
 lender
 butcher
+steward
+journey
+barley
+cobble
 clerks
 cobbler
 cooper
@@ -57,6 +68,7 @@ labour
 lord
 lock
 key
+cart
 order
 prince
 peddler
@@ -156,6 +168,7 @@ badger
 baler
 ballast
 banker
+fool
 barber
 barker
 worker
@@ -182,6 +195,7 @@ purse
 raft
 reed
 rent
+marble
 stone
 straw
 hay
@@ -312,6 +326,7 @@ ribbon
 carriage
 gear
 cloth
+mitten
 arch
 belt
 mill
@@ -404,3 +419,14 @@ plum
 hoar
 ivy
 creek
+arrow
+beech
+match
+ink
+gum
+late
+candle
+grease
+torch
+ground
+wild

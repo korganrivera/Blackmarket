@@ -1,0 +1,67 @@
+rain
+foggy
+cloudy
+showers
+
+
+sunny
+cloudy
+party cloudy = half sun, half cloud.
+rainy
+snowy
+sleeting
+stormy
+lightning
+thunder
+hail
+windy
+foggy
+icy
+tornado
+rainbow
+clear sky
+hot war cold freezing
+
+
+I'll base cloudiness on humidity and heat.  but how?
+
+maybe I should have a separate graph for cloudiness.
+
+clear
+a few clouds/mostly clear
+a little cloudy
+partly cloudy
+cloudy
+very cloudy/overcast
+
+TEMPS
+freezing
+cold
+chilly
+temperate
+warm
+very warm
+hot
+very hot
+
+HUMIDITY
+dry
+humid
+damp
+very humid
+wet
+
+precipitation
+misty
+showers
+gray
+light rain
+rain
+heavy rain
+
+
+
+
+
+
+

@@ -1,0 +1,5 @@
+describing where you are on a map:
+
+nearby things you can see.
+street name, hood name, interesting facts.
+sights, smells, sounds, actions.

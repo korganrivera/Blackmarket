@@ -1,0 +1,25 @@
+
+
+		BILL THE BUTCHER
+		   fine meats   
+		----------------
+ 	        BUY    |    SELL
+		----------------
+		beef   |   sperm
+		tails  |  rabbit
+		livers |  oxface
+		bone   |  shield
+		blood  |  boners
+		       
+
+		        BILL THE BUTCHER          
+		           fine meats   
+		--------------------------------
+ 	        BUY       $    | SELL        $ 
+		--------------------------------
+		beef     4.56  | sperm      0.01  
+		tails    1.23  | rabbit     0.02
+		livers  14.30  | oxface     1.23 
+		bone   100.06  | shield  1000.69    
+		blood    0.07  | boners   666.66
+		       

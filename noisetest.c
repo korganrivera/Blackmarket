@@ -12,7 +12,7 @@
 #include <stdlib.h>
 
 #define LEN 33      //  must be 2^n + 1.
-#define MIN 11.0
+#define MIN 0.0
 #define MAX 100.0
 
 /*

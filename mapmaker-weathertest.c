@@ -1,33 +1,33 @@
 /*
-    Map generator for Blackmarket. Generates Streets and blocks.
-    start:  2015.6.23.18:50
-    end:    2015.6.23.23:11     (includes about an hour of just playing with it.)
+   Map generator for Blackmarket. Generates Streets and blocks.
+   start:  2015.6.23.18:50
+   end:    2015.6.23.23:11     (includes about an hour of just playing with it.)
 
     start:  2015.6.23~15:00     Adding a shopmaker function.
             2015.6.23.20:49     It works!  Took me about 5 hours.  The function identifies all the potential shop
                                 locations by matching a thing I called a 'quadrant' to positions on the map.  A
                                 quadrant describes the conditions necessary for a shop to be placed.  A quadrant
-                                looks like this:
+                                looks like this :
 
                                   _  S  _
                                  !S  B !S
                                   _  B  _
 
-                                S means street. !S means 'not street'. B means block. I match this shape
-                                all over the map, because the bottom B is where a shop can go. The B above it
-                                would become a door, and you can't have street tiles on either side of a door. I
-                                 match this everywhere, then I rotate the quadrant three times for the other
-                                matches. Wherever a door can be placed, I write SHOP on a map copy. After the
-                                quadrant stuff, I go through the map one cell at a time, visiting each potential
-                                shop location. I decide if that location will be a shop or not randomly and, if
-                                it will, I count how many potential doors it has, and choose between those
-                                randomly too. Then I write my map copy of doors and shops on top of the original
-                                map, and it's done!
+                               S means street. !S means 'not street'. B means block. I match this shape
+                               all over the map, because the bottom B is where a shop can go. The B above it
+                               would become a door, and you can't have street tiles on either side of a door. I
+                               match this everywhere, then I rotate the quadrant three times for the other
+                               matches. Wherever a door can be placed, I write SHOP on a map copy. After the
+                               quadrant stuff, I go through the map one cell at a time, visiting each potential
+                               shop location. I decide if that location will be a shop or not randomly and, if
+                               it will, I count how many potential doors it has, and choose between those
+                               randomly too. Then I write my map copy of doors and shops on top of the original
+                               map, and it's done!
 
-                                note: hcount and vcount are globals here that are used in streetmaker.
-                                They need to be taken out, they're just for debug right now.
+                               note: hcount and vcount are globals here that are used in streetmaker.
+                               They need to be taken out, they're just for debug right now.
 
-            2015.9.10.22:26     adding hoodmaker function.  Doesn't work yet.  Basically using most of streetmaker().
+           2015.9.10.22:26     adding hoodmaker function.  Doesn't work yet.  Basically using most of streetmaker().
 
             2015.9.13.02:41     added hoodmaker function.
                                 Next I need to add a function that reads my prefixes and suffixes for
@@ -102,6 +102,18 @@
 
                                 Nevermind, I fixed the mapsquash thing, but yeah the hood name number problem still remains.
             2015.10.2.01:25     It has been fixed, and I've cleaned up the debug stuff so it's prettier.  :)
+
+            2015.10.4.20:52     Going to throw weatherreport in here, just because why not.
+            2015.10.4.21:26     I put it in there, but I plan to take it out.  who gives a fuck about the weather.
+
+            2015.10.6.17:54     Something I want to add at some point.  I want to put all text output into a buffer
+                                and then later forward it to blocktexter, so the output looks good.  Maybe do it right now
+                                for the street stuff.
+
+            2015.10.11.13:56    Going to add a basic local description function: a look command basically.
+                                I guess I'll try to add a sound and smell function at some point too.
+                                Dude, I don't even care anymore.
+
 */
 
 #include <stdio.h>
@@ -109,39 +121,57 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <math.h>
+#ifndef M_PI
+    #define M_PI 3.14159265358979323
+#endif
+#define LEN 33                              //  must be 2^n+1. This is the width of the graphs I generate for weather.
+#define HEATMIN 30.0                        //  52.0.   These values will be calculated using yearly models later.
+#define HEATMAX 75.0                        //  90.0.
 
+//  some convenient aliases.
 #define STREET 0
 #define SHOP 1
 #define DOOR 2
 #define BLOCK 3
 
-#define HEIGHT 32
-#define WIDTH  32
+//  height and width of the entire map.
+#define HEIGHT 50
+#define WIDTH  80
 
-#define MINBLOCKSIZE 5                      //  blocks are the BLOCKS that aren't streets.  This is the min length or width a block can be.
+#define MINBLOCKSIZE 3                      //  blocks are the BLOCKS that aren't streets.  This is the min length or width a block can be.
 #define SHOPCHANCE 60                       //  chance that a viable shop position actually becomes a shop.
-#define HOODSIZE 10                         //  minimum height and width of a neighbourhood.
+#define HOODSIZE 20                         //  minimum height and width of a neighbourhood.
 
-#define DEBUG 0                             //  toggle for debug info. 1=on, 0=off.
+#define DEBUG 1                             //  toggle for debug info. 1=on, 0=off.
 
-unsigned streetmaker(unsigned x1,unsigned y1,unsigned x2,unsigned y2, char *map, unsigned blocksize, unsigned widthofmainmap, unsigned *stindexmap, unsigned sindex);
-void show(unsigned r, unsigned c, char *map);                                   //  displays an array of chars, for *map (the main map.)
-void ushow(unsigned *map, unsigned height, unsigned width);                     //  displays an array of unsigneds, for *hoodmap.
-unsigned shopmaker(unsigned height, unsigned width, char *map, char chance);    //  places shops.
-unsigned hoodmaker(unsigned *nhood, unsigned x1, unsigned y1, unsigned x2, unsigned y2, unsigned height, unsigned width, unsigned nsize, unsigned hindex);
-unsigned filereader(char *fname, char ***array);                                //  reads text files with name parts for streets and hoods.
-void proper(char *str);                                                         //  capitalises the first letter of given string.
-void unproper(char *str);                                                       //  lowers the case of the first letter of given string.
-void display(unsigned r, unsigned c, char *map, unsigned pos);                  //  shows map with user on it.
+/***************************************************************************************************************/
 
+//  This is used to record what the last weather report was, to avoid reporting the same thing each time.
+typedef struct _weather {
+        unsigned humidity;
+        unsigned heat;
+        unsigned cloud;
+        unsigned temp;
+        unsigned firsttime;
+        unsigned tod;
+        unsigned wind;
+        unsigned sun;
+}weather;
 
-unsigned hcount;                            //  hcount and vcount are used to balance grid splitting in streetmaker function.
-unsigned vcount;                            //  meh, might take these out.
-
-typedef struct _user {                      //  user's character info.  super basic right now.
-    unsigned position;                      //  index of map where user character is.
+//  users character info.
+typedef struct _user {
+    unsigned position;
 }user;
 
+//  basic clock.
+typedef struct _clocky {
+    unsigned h;
+    unsigned m;
+    unsigned s;
+}clocky;
+
+//  a 'map unit'. an array of these makes a map.
 typedef struct _cell {
     char type;          //  whether the cell is street, shop, door, or block.
     char *hood;         //  name of neighbourhood.
@@ -154,6 +184,29 @@ typedef struct _cell {
     struct _cell *r;
 }cell;
 
+/***************************************************************************************************************/
+
+unsigned streetmaker(unsigned x1,unsigned y1,unsigned x2,unsigned y2, char *map, unsigned blocksize, unsigned widthofmainmap, unsigned *stindexmap, unsigned sindex);
+void show(unsigned r, unsigned c, char *map);                                   //  displays an array of chars, for *map (the main map.)
+void ushow(unsigned *map, unsigned height, unsigned width);                     //  displays an array of unsigneds, for *hoodmap.
+unsigned shopmaker(unsigned height, unsigned width, char *map, char chance);    //  places shops.
+unsigned hoodmaker(unsigned *nhood, unsigned x1, unsigned y1, unsigned x2, unsigned y2, unsigned height, unsigned width, unsigned nsize, unsigned hindex);
+unsigned filereader(char *fname, char ***array);                                //  reads text files with name parts for streets and hoods.
+void proper(char *str);                                                         //  capitalises the first letter of given string.
+void unproper(char *str);                                                       //  lowers the case of the first letter of given string.
+void display(unsigned r, unsigned c, char *map, unsigned pos);                  //  shows map with user on it.
+unsigned weatherreport(weather *last, double heat, double humidity, double wind, double cloud, clocky *c);
+void noise(double *array, unsigned start, unsigned end, unsigned level, double min, double max);
+void sinefiller(double *array, unsigned size, double min, double max);
+void insideshop(void);
+void look(cell *map, unsigned loc);                                             //  describes stuff seen around you.
+
+/***************************************************************************************************************/
+
+unsigned hcount;                            //  hcount and vcount are used to balance grid splitting in streetmaker function.
+unsigned vcount;                            //  meh, might take these out.
+
+/***************************************************************************************************************/
 
 int main(void){
     unsigned len, a, b, c, i, j, r, *nhood, *stindexmap;
@@ -161,6 +214,14 @@ int main(void){
     char *map, input;
     user player;
     cell mapsquash[HEIGHT][WIDTH];
+    clocky myclock;
+
+    //  weather stuff.
+    double heat[LEN];
+    double humidity[LEN];
+    double wind[LEN];
+    double cloud[LEN];
+    weather lastcheck;
 
     //  variables for reading names from files.
     unsigned totalprefixes, totalsuffixes, totalstreetsuffs;
@@ -219,8 +280,11 @@ int main(void){
     //ushow(stindexmap, HEIGHT, WIDTH);
     //if(DEBUG) getche();
 
-    //  read list of prefixes, suffixes, and street types from text files.
-    //  these are used to create hood and street names.
+    /*
+     *  read list of prefixes, suffixes, and street types from text files.
+     *  these are used to create hood and street names.
+     */
+
     if(DEBUG) printf("\nreading files...");
     totalprefixes = filereader("prefixes.txt", &prefixes);
     if(DEBUG) printf("\n\ttotalprefixes complete.");
@@ -230,8 +294,8 @@ int main(void){
     if(DEBUG) printf("\n\ttotalstreetsuffs complete.");
     if(DEBUG) printf("\n...done.");
 
-    //  First, create hood names.
-    //  create an array to hold hood names.
+    //  create hood names.
+    //  first, create an array to hold hood names.
     if(DEBUG) printf("\nmallocing hoodnames...");
     if((hoodnames = malloc(hoodindex*sizeof(char*))) == NULL){ puts("hoodnames: malloc failed."); exit(1); } //  malloc space for 'hoodindex' character pointers.
     if(DEBUG) printf("done.");
@@ -342,7 +406,6 @@ int main(void){
     free(streetsuffs);
 
     if(DEBUG) printf("done.");
-    //if(!DEBUG) {printf("\n\nSUCCESS! done.\n\n"); return 0; }
 
     if(DEBUG){
         puts("\nhood names for this map:");
@@ -367,21 +430,18 @@ int main(void){
             strcpy(mapsquash[i][j].hood, hoodnames[nhood[i*WIDTH+j]]);
 
             //  next, do the same for the streetname.
-
             //  copy street name over if it's a street.
             if(*(map+i*WIDTH+j)==STREET){
                 if((mapsquash[i][j].street = malloc(1+strlen(streetnames[stindexmap[i*WIDTH+j]-1]))) == NULL) { puts("malloc2 failed."); exit(1); }
                 //  then copy it over.
                 strcpy(mapsquash[i][j].street, streetnames[stindexmap[i*WIDTH+j]-1]);
-
-
             }
-            //  otherwise, mapsquash.street here will be an unallocated pointer.  don't use it! maybe I can set it to something safer later.
+            //else *(map+i*WIDTH+j) = NULL;
 
             //  set index.  use later, probably.
             mapsquash[i][j].index = i*WIDTH+j;
             //  now, connect all these shits together.  change routine if on edge and/or corner.    hassle.
-            //  if in center, connect to everything.
+            //  if in center, connect to everything.  There must be a better way than this.
             if(i && j && i!=(HEIGHT-1) && j!=WIDTH-1){
                 mapsquash[i][j].u = &mapsquash[i-1][j];
                 mapsquash[i][j].d = &mapsquash[i+1][j];
@@ -436,6 +496,23 @@ int main(void){
     }
     if(DEBUG) printf("done.");
 
+    //  setup weather stuff.
+    lastcheck.firsttime=1;                          //  used to check if weatherreport() has been called before or not.
+    sinefiller(heat, LEN, HEATMIN, HEATMAX);        //  set heat values between HEATMIN and HEATMAX.  later, min and max will be set by the current season.
+
+    humidity[0] = humidity[LEN-1] = 50.0;           //  set outer limits of arrays to be noised.
+    wind[0]     = wind[LEN-1]     = 0.0;
+    cloud[0]    = cloud[LEN-1]    = 30.0;
+    //wind[0] = wind[LEN-1] = (double)rand() / (double)RAND_MAX * 20.0;
+
+    noise(humidity, 0, LEN-1, 1, 0.0, 100.0);       //  set humidity values between 0-100%.
+    noise(wind,     0, LEN-1, 1, 0.0, 88.1);        //  set wind values between 0-88.1, using the Beufort scale.
+    noise(cloud,    0, LEN-1, 1, 0.0, 81.0);        //  set cloud values between 0-100%.
+
+    myclock.h = 0;
+    myclock.m = 0;
+    myclock.s = 0;
+
 //  -----------v-------big ugly game loop, just for testing-------------v-----------------
 
     //  put user in random place.  actually, just put him on the first piece of street from top left.  do this better later.
@@ -448,9 +525,35 @@ int main(void){
         //  show map with user on it.
         display(HEIGHT, WIDTH, map, player.position);
 
+        printf("\n%02d:%02d:%02d\n", myclock.h, myclock.m, myclock.s);
+
+        //  report weather.
+        if(!myclock.s) weatherreport(&lastcheck, heat[i], humidity[i], wind[i], cloud[i], &myclock);
+
+        for(i=0; i<10; i++){                //  advance the clock this many seconds.
+            myclock.s += 1;
+
+            if(myclock.s == 60) {
+                myclock.s = 0;
+                myclock.m ++;
+            }
+            if(myclock.m == 60){
+                myclock.m = 0;
+                myclock.h ++;
+            }
+            if(myclock.h == 24){
+                myclock.h = 0;
+            }
+        }
+
         putchar('\n');
-        if(*(map+player.position)==STREET) printf("\n%s, ", streetnames[stindexmap[player.position]-1]);
-        printf("%s", hoodnames[nhood[player.position]]);
+        if(*(map+player.position)==STREET) printf("\nyou are on %s, ", streetnames[stindexmap[player.position]-1]);
+        else if(*(map+player.position)==SHOP) printf("\nyou are in The Vermillion Minotaur, ", streetnames[stindexmap[player.position]-1]);
+
+//      if(map[player.position].type==STREET) printf("\nyou are on %s, ", map[player.position].street);   later on, use this style.  shorter and easier to read.
+
+        printf("in the neighbourhood of %s.", hoodnames[nhood[player.position]]);
+
         printf("\noptions: x ");
 
         if(player.position/WIDTH){
@@ -469,9 +572,8 @@ int main(void){
             if(*(map+player.position+1)==STREET) printf("e");
         }
 
-        if(*(map+player.position)==SHOP) puts("\nYou are in a shop.");
+        if(*(map+player.position)==SHOP) insideshop();
         else if(*(map+player.position)==STREET) puts("\nYou are on the street.");
-
 
         printf("\n: ");
         //input=getchar();
@@ -518,7 +620,7 @@ int main(void){
         }
     }
 
-//  ----------^--------big ugly game loop, just for testing------------^------------------
+//  ----------^--------big ugly game, just for testing------------^------------------
 
     free(map);
     free(nhood);
@@ -929,5 +1031,166 @@ void display(unsigned r, unsigned c, char *map, unsigned pos){
         if(i%c+1==c) putchar('\n');
     }
 }
+
+
+unsigned weatherreport(weather *last, double heat, double humidity, double wind, double cloud, clocky *c){
+
+    //printf("\n\nheat: %.3fF\thumidity: %.3f%%\twind: %.3f\tcloud: %.3f\ttime: %f", heat, humidity, wind, cloud, time);
+    unsigned time;      //  just the hour from the clock.
+
+    time = c->h;
+
+    //  time of day.
+    if(last->firsttime){
+        last->firsttime=0;
+
+        //  time of day.
+        if(time<12.0){      printf("it is morning. ");   last->tod = 0; }
+        else if(time<17.0){ printf("it is afternoon. "); last->tod = 1; }
+        else if(time<20.0){ printf("it is evening. ");   last->tod = 2; }
+        else{               printf("it is night. ");     last->tod = 3; }
+
+        //  temp.
+        if(heat<32.0){      printf("freezing. ");   last->temp = 0; }
+        else if(heat<44.0){ printf("cold. ");       last->temp = 1; }
+        else if(heat<57.0){ printf("chilly. ");     last->temp = 2; }
+        else if(heat<74.0){ printf("mild. ");       last->temp = 3; }
+        else if(heat<83.0){ printf("warm. ");       last->temp = 4; }
+        else if(heat<94.0){ printf("very warm. ");  last->temp = 5; }
+        else if(heat<99.0){ printf("hot. ");        last->temp = 6; }
+        else{               printf("very hot. ");   last->temp = 7; }
+
+        //  humidity.
+        if(humidity<40.0){       printf("dry. ");       last->humidity = 0; }
+        else if(humidity<60.0){  printf("");            last->humidity = 1; }
+        else if(humidity<75.0){  printf("humid. ");     last->humidity = 2; }
+        else if(humidity<90.0){  printf("very humid. ");last->humidity = 3; }
+        else{                    printf("rain. ");      last->humidity = 4; }
+
+        //  sunniness.
+        if(cloud<49.0 && time>7.0 && time<16.0){ printf("sunny. "); last->sun = 0; }
+        else last->sun = 1;
+
+        //  cloudiness.
+        if(cloud<16.0){      printf("clear skies. ");       last->cloud = 0; }
+        else if(cloud<33.0){ printf("a little cloudy. ");   last->cloud = 1; }
+        else if(cloud<49.0){ printf("partly cloudy. ");     last->cloud = 2; }
+        else if(cloud<65.0){ /*printf("cloudy. ");*/        last->cloud = 3; }
+        else if(cloud<81.0){ printf("very cloudy. ");       last->cloud = 4; }
+        else{                printf("overcast. ");          last->cloud = 5; }
+
+        //  wind.
+        if(wind<1.1){       printf("calm.");                last->wind = 0; }
+        else if(wind<5.5){  printf("light air.");           last->wind = 1; }
+        else if(wind<11.9){ printf("light breeze.");        last->wind = 2; }
+        else if(wind<19.7){ printf("gentle breeze.");       last->wind = 3; }
+        else if(wind<28.7){ printf("moderate breeze.");     last->wind = 4; }
+        else if(wind<38.8){ printf("fresh breeze.");        last->wind = 5; }
+        else if(wind<49.9){ printf("strong breeze.");       last->wind = 6; }
+        else if(wind<61.8){ printf("high wind.");           last->wind = 7; }
+        else if(wind<74.6){ printf("gale.");                last->wind = 8; }
+        else if(wind<88.1){ printf("strong/severe gale.");  last->wind = 9; }
+    }
+
+    else{
+        if(time<12.0 && last->tod != 0){                      printf("it is morning. ");    last->tod = 0; }
+        else if(time >= 12.0 && time<17.0 && last->tod != 1){ printf("it is afternoon. ");  last->tod = 1; }
+        else if(time >= 17.0 && time<20.0 && last->tod != 2){ printf("it is evening. ");    last->tod = 2; }
+        else if(time >= 20.0 && last->tod != 3){              printf("it is night. ");      last->tod = 3; }
+
+        //  temp.
+        if(heat<32.0 && last->temp != 0){                    printf("freezing. ");   last->temp = 0; }
+        else if(heat>=32.0 && heat<44.0 && last->temp != 1){ printf("cold. ");       last->temp = 1; }
+        else if(heat>=44.0 && heat<57.0 && last->temp != 2){ printf("chilly. ");     last->temp = 2; }
+        else if(heat>=57.0 && heat<74.0 && last->temp != 3){ printf("mild. ");       last->temp = 3; }
+        else if(heat>=74.0 && heat<83.0 && last->temp != 4){ printf("warm. ");       last->temp = 4; }
+        else if(heat>=83.0 && heat<94.0 && last->temp != 5){ printf("very warm. ");  last->temp = 5; }
+        else if(heat>=94.0 && heat<99.0 && last->temp != 6){ printf("hot. ");        last->temp = 6; }
+        else if(heat>=99.0 && last->temp != 7){              printf("very hot. ");   last->temp = 7; }
+
+        //  humidity.
+        if(humidity<40.0 && last->humidity != 0){                         printf("dry. ");        last->humidity = 0; }
+        else if(humidity>=40.0 && humidity<60.0 && last->humidity != 1){  printf("");             last->humidity = 1; }
+        else if(humidity>=60.0 && humidity<75.0 && last->humidity != 2){  printf("humid. ");      last->humidity = 2; }
+        else if(humidity>=75.0 && humidity<90.0 && last->humidity != 3){  printf("very humid. "); last->humidity = 3; }
+        else if(humidity>=90.0 && last->humidity != 4){                   printf("rain. ");       last->humidity = 4; }
+
+        //  sunniness.
+        if(cloud<49.0 && time>7.0 && time<16.0 && last->sun != 0){ printf("sunny. "); last->sun = 0; }
+        else if(last->sun != 1) last->sun = 1;
+
+        //  cloudiness.
+        if(cloud<16.0 && last->cloud != 0){      printf("clear skies. ");       last->cloud = 0; }
+        else if(cloud<33.0 && last->cloud != 1){ printf("a little cloudy. ");   last->cloud = 1; }
+        else if(cloud<49.0 && last->cloud != 2){ printf("partly cloudy. ");     last->cloud = 2; }
+        else if(cloud<65.0 && last->cloud != 3){ printf("cloudy. ");            last->cloud = 3; }
+        else if(cloud<81.0 && last->cloud != 4){ printf("very cloudy. ");       last->cloud = 4; }
+        else if(last->cloud != 5){               printf("overcast. ");          last->cloud = 5; }
+
+        //  wind.
+        if(wind<1.1 && last->wind != 0){        printf("calm.");                last->wind = 0; }
+        else if(wind<5.5 && last->wind != 1){  /*printf("light air.");*/        last->wind = 1; }
+        else if(wind<11.9 && last->wind != 2){ /*printf("light breeze.");*/     last->wind = 2; }
+        else if(wind<19.7 && last->wind != 3){ printf("gentle breeze.");        last->wind = 3; }
+        else if(wind<28.7 && last->wind != 4){ /*printf("moderate breeze.");*/  last->wind = 4; }
+        else if(wind<38.8 && last->wind != 5){ /*printf("fresh breeze.");*/     last->wind = 5; }
+        else if(wind<49.9 && last->wind != 6){ printf("strong breeze.");        last->wind = 6; }
+        else if(wind<61.8 && last->wind != 7){ printf("high wind.");            last->wind = 7; }
+        else if(wind<74.6 && last->wind != 8){ printf("gale.");                 last->wind = 8; }
+        else if(wind<88.1 && last->wind != 9){ printf("strong/severe gale.");   last->wind = 9; }
+    }
+}
+
+
+/*
+    Takes an array, indexes of its bounds, level, and min and max values that determine the range of values,
+    and puts values into the array using the mid-displacement routine.  On first call, level should be 1.
+    e.g. noise(array1, 0, 16, 1, -5.5, 15.0)
+    The size of the array MUST be 2^n+1.
+*/
+void noise(double *array, unsigned start, unsigned end, unsigned level, double min, double max){
+    double avg, dis;
+    unsigned mid;
+    if(end == start+1) return;
+
+    if(min>max) {printf("\nnoise(): min is greater than max. array not complete."); return; }
+
+    avg = (*(array+start)+*(array+end))/2.0;
+    mid = (start+end)/2;
+    dis = (double)rand() / (double)RAND_MAX * (max-min) + min;
+    dis /= (double)(1<<level);
+
+    *(array+mid) = avg+dis;
+
+    noise(array, start, mid, level+1, min, max);
+    noise(array, mid, end, level+1, min, max);
+}
+
+
+/*
+given an array, fills array with sine wave starting at min, going to max, and back to min again.
+I'm using it for daily temperatures. requires math.h and possible a redeclaration of M_PI.
+e.g. sinefiller(array1, <size of array>, 40.8, 60.8);
+*/
+void sinefiller(double *array, unsigned size, double min, double max){
+    unsigned i;
+    //for(i=0; i<size; i++) array[i] = (double)(max-min)*sin((double)i/(size-1)*M_PI)+min;
+    for(i=0; i<size; i++) array[i] = sin(M_PI*((double)i/(double)size)) * sin(M_PI*(double)i/((double)(size-1))) * ((double)max-(double)min) + (double)min;
+}
+
+
+
+void insideshop(void){
+    puts("\nYou are in a shop.");
+}
+
+
+void look(cell *map, unsigned loc){
+    //if(map[loc]->l==SHOP) printf("\nThere is a shop to the west.");
+    //if(map[loc]->r==SHOP) printf("\nThere is a shop to the east.");
+    //if(map[loc]->u==SHOP) printf("\nThere is a shop to the north.");
+    //if(map[loc]->d==SHOP) printf("\nThere is a shop to the south.");
+}
+
 
 

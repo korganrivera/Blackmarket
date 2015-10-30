@@ -122,7 +122,7 @@
 #define SHOPCHANCE 60                       //  chance that a viable shop position actually becomes a shop.
 #define HOODSIZE 10                         //  minimum height and width of a neighbourhood.
 
-#define DEBUG 0                             //  toggle for debug info. 1=on, 0=off.
+#define DEBUG 1                             //  toggle for debug info. 1=on, 0=off.
 
 unsigned streetmaker(unsigned x1,unsigned y1,unsigned x2,unsigned y2, char *map, unsigned blocksize, unsigned widthofmainmap, unsigned *stindexmap, unsigned sindex);
 void show(unsigned r, unsigned c, char *map);                                   //  displays an array of chars, for *map (the main map.)
@@ -209,7 +209,7 @@ int main(void){
         else printf("...done. there are %u hoods.", hoodindex);
     }
 
-    if(DEBUG) printf("\n#streets: %u\t#hoods: %u\t#shops: %u", streetindex, hoodindex, totalshops);
+    printf("\n#streets: %u\t#hoods: %u\t#shops: %u", streetindex, hoodindex, totalshops);
 
     //puts("\nhood map:\n");
     //ushow(nhood, HEIGHT, WIDTH);
@@ -800,7 +800,7 @@ unsigned shopmaker(unsigned height, unsigned width, char *map, char chance){
 
     free(mymap);
     free(potentialshops);
-    if(DEBUG) printf("\n\ttotalpotential shops: %u", totalpotentials);
+    printf("\n\ttotalpotential shops: %u", totalpotentials);
     return totalshops;
 }
 
@@ -918,7 +918,7 @@ void unproper(char *str){
 void display(unsigned r, unsigned c, char *map, unsigned pos){
     unsigned i, size=r*c;
 
-    if(!DEBUG) system("cls");
+    //system("cls");
     for(i=0; i<size; i++){
         if(!(i%c)) putchar(' ');                    //  puts a space on the left edge, easier to read map.
         if(i==pos) putchar('@');                    //  player's character.
