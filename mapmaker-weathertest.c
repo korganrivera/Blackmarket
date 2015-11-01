@@ -114,6 +114,20 @@
                                 I guess I'll try to add a sound and smell function at some point too.
                                 Dude, I don't even care anymore.
 
+            2015.10.31.23:05    Been a while. I'm here because of Vyvanse. Since last time, I've written an
+                                algorithm that lets a shop buy the most profitable items from the supplier. I've
+                                also come up with a stack of structs that will become a database of shops,
+                                including inventory, and sales records. So now I need to build that. I really
+                                need to learn how to break up my source code into multiple files because it's
+                                about to become ridiculous.
+
+            2015.11.01.02:27    3 hours later!  The game now has shops with inventories, and sales histories.
+                                There is a main supplier.  All the shops can do their initial purchases there
+                                whereby they use my SupplierPurchasing algorithm and buy the most profitable stuff that they can
+                                afford and store.  Things went without a problem at all so that's fucking awesome.
+                                Can't believe it's all in there.  About 1300 lines of code so far. :)
+
+
 */
 
 #include <stdio.h>
@@ -126,8 +140,12 @@
     #define M_PI 3.14159265358979323
 #endif
 #define LEN 33                              //  must be 2^n+1. This is the width of the graphs I generate for weather.
+                                            //  this is currently being used for both length of graphs for item noise and for weather noise.
+                                            //  that might be a problem later.
+
 #define HEATMIN 30.0                        //  52.0.   These values will be calculated using yearly models later.
 #define HEATMAX 75.0                        //  90.0.
+#define TOTAL_ITEMS 1000                    //  number of items the supplier holds.  replace this later when I read from a file.
 
 //  some convenient aliases.
 #define STREET 0
@@ -136,15 +154,17 @@
 #define BLOCK 3
 
 //  height and width of the entire map.
-#define HEIGHT 50
+#define HEIGHT 50                           //  H50 x W80 is a good working size.
 #define WIDTH  80
 
 #define MINBLOCKSIZE 3                      //  blocks are the BLOCKS that aren't streets.  This is the min length or width a block can be.
 #define SHOPCHANCE 60                       //  chance that a viable shop position actually becomes a shop.
 #define HOODSIZE 20                         //  minimum height and width of a neighbourhood.
 
-#define DEBUG 1                             //  toggle for debug info. 1=on, 0=off.
+#define NPC_POP (HEIGHT*WIDTH)              //  NPC population in game. using area of map as rough guide for now. approximates Aberdeen population.
 
+#define DEBUG 1                             //  toggle for debug info. 1=on, 0=off.
+#define SHOWLIST 1                          //  debug thing, shows supplierpurchasing working list.
 /***************************************************************************************************************/
 
 //  This is used to record what the last weather report was, to avoid reporting the same thing each time.
@@ -184,6 +204,56 @@ typedef struct _cell {
     struct _cell *r;
 }cell;
 
+/*  a record of how many item sales a shop got at a given price
+    at a given time. an array of these makes a sales history of
+    a particular item. The shop will then use this to calculate
+    a better price for the item. */
+struct sales_record {
+    double price;
+    unsigned sales;
+    unsigned time;                          //  not sure what type yet.
+};
+
+/*  This is the struct that holds info
+    about an item that a shop has. An
+    array these makes an inventory. */
+struct item_record {
+    char *name;
+    unsigned index;
+    unsigned size;
+    unsigned quantity;
+    double price;
+    double m,n,b;                           //  the shop's estimate of the demand function for this item.
+    struct sales_record *sales_history;     //  This will be the head of a linked list probably.
+};
+
+/*  This is everything that makes a shop.*/
+struct _shop {
+    char *name;
+    unsigned loc;
+    char *desc;
+    char open;
+    unsigned space;                         //  max warehouse space.
+    double money;                           //  total money the shop has.
+    struct item_record *inventory;          //  the shop's inventory.
+                                            //  also somehow have opening/closing hours for the store
+                                            //  here. add that when I know what format time takes.
+};
+
+//  A supplier's item.  An array of these
+//  makes the inventory of the supplier.
+struct supplier_item {
+    char *name;
+    unsigned quantity;                      //  total items available for sale.
+    unsigned size;                          //  how much inventory space it would take to hold this item.
+    unsigned bought;                        //  number sold to the shop buying.  Shop uses this as scratch space to do its calculation.
+    double cost;                            //  cost to purchase this item.
+    double m,b;                             //  the shop's estimate of the demand function for this item.
+    double *noise;                          //  each item has an array filled with noise to add to its demand line.  You can loop it.
+    double rrp;                             //  price recommended to shops to sell at initially.
+};
+
+
 /***************************************************************************************************************/
 
 unsigned streetmaker(unsigned x1,unsigned y1,unsigned x2,unsigned y2, char *map, unsigned blocksize, unsigned widthofmainmap, unsigned *stindexmap, unsigned sindex);
@@ -200,6 +270,7 @@ void noise(double *array, unsigned start, unsigned end, unsigned level, double m
 void sinefiller(double *array, unsigned size, double min, double max);
 void insideshop(void);
 void look(cell *map, unsigned loc);                                             //  describes stuff seen around you.
+void noise(double *array, unsigned start, unsigned end, unsigned level, double min, double max);    //  fills an array with noise, using mid-placement algorithm.
 
 /***************************************************************************************************************/
 
@@ -227,6 +298,18 @@ int main(void){
     unsigned totalprefixes, totalsuffixes, totalstreetsuffs;
     char **prefixes, **suffixes, **streetsuffs;     //  array of strings; prefixes, suffixes, and street types.
     char **hoodnames, **streetnames;                //  complete street and hood names.
+
+    //  struct arrays for databases.
+    struct _shop *shopdb;                           //  Shop database.
+    struct supplier_item *supplies;                 //  Supplier's database.
+
+    //  variables for supplier purchasing algorithm.
+    unsigned best_item;
+    unsigned possible_flag;                     //  indicates if I traversed the list and found no options. 0 if no options.
+    double profit_density;                      //  profit/space of item.
+    double best_profit_density;
+    double profit_made;
+    double spent;
 
     srand(time(NULL));
 
@@ -258,6 +341,165 @@ int main(void){
     if(DEBUG) printf("\ncalling shopmaker...");
     totalshops = shopmaker(HEIGHT, WIDTH, map, SHOPCHANCE);                                                  //  find possible shop locations and place them.
     if(DEBUG) printf("...done.");
+
+    //  now I know how many shops there are, I need to make an array of that many shops.
+    //struct _shop shop[100];
+    if(DEBUG) printf("\nmallocing shop database...");
+    if((shopdb = malloc(totalshops*sizeof(struct _shop))) == NULL){ puts("\nmain(): malloc failed."); exit(1); }       //  malloc space for hood map.
+    if(DEBUG) printf("done.");
+
+    //  walk through the map. Whenever I hit a
+    //  shop, make the current shop's location
+    //  equal to the map index.
+    if(DEBUG) printf("\nmaking shop address lookup table...");
+    for(i=0, j=0; i<WIDTH*HEIGHT; i++){
+         if(*(map+i) == SHOP){
+            shopdb[j].loc = i;
+            j++;
+         }
+    }
+    if(DEBUG) printf("done.");
+    //  now when I enter a shop, I search the shopdb's loc values for the player's location.
+
+    //  I need to give shops some money and some space.  I'm just going to give them random values for now.
+    //  later base this on a height map over the game map, so that there are better areas to own a shop in.
+
+    if(DEBUG) printf("\ndishing out cash and warehouse space to shops...");
+    for(i=0; i<totalshops; i++){
+        shopdb[i].space = rand()%901 + 100;                                     //  100 to 1000 blocks of warehouse storage.
+        shopdb[i].money = ((float)rand() / (float)(RAND_MAX)) * 900.0 + 100.0;  //  $100.00 to $1000.00 to each store initially.
+    }
+    if(DEBUG) printf("done.");
+
+    //  malloc space for supplier. just hardcode # of supplies right now until things work,
+    //  later on, put items into a separate file.
+    if(DEBUG) printf("\nmallocing supplier database...");
+    if((supplies = malloc( TOTAL_ITEMS * sizeof(struct supplier_item))) == NULL){ puts("\nmain(): malloc failed."); exit(1); }       //  malloc space for hood map.
+    if(DEBUG) printf("done.");
+
+    if(DEBUG) printf("\nfilling supplier database with garbage to sell...");
+    //  fill supplier's inventory with garbage to buy.
+    //  I'm going to give items m and b values here, and for now I'll say that I'm using the supplier's
+    //  database to hold the demand lines for each item.  That implies that the demand for items is universal
+    //  across the whole game map, instead of by hood.  For now, that'll do, but later I need to change that.
+    //  I just want to get a working model up and running asap.
+
+    for(i=0; i<TOTAL_ITEMS; i++){
+        supplies[i].quantity    = rand() % 101;
+        supplies[i].size        = rand() % 100 + 1;
+        supplies[i].bought      = 0;
+        supplies[i].cost        = ((float)rand() / (float)(RAND_MAX)) * 100.0;      //  items cost $0 to $100.
+
+        //  generate sensible m and b values, using city population.
+        //  this line shouldn't predict sales greater than the total population, or prices greater than $1000.
+        //supplies[i].b           = rand()%(NPC_POP + 1);
+
+        //  minimum audience for a product is 5% of the population.  Just because.
+        j = 5.0*NPC_POP/100.0;
+        supplies[i].b           =  ((float)rand() / (float)(RAND_MAX)) * (NPC_POP - j) + j;
+
+        supplies[i].m           = ((float)rand() / (float)(RAND_MAX)) * -3.5 - 3.5; //  gradient between -7 to -3.5.  Seems sensible.
+        supplies[i].rrp         = supplies[i].b / -supplies[i].m;                   //  This is the midpoint of the line: optimal profit point.
+
+//        printf("\nitem %u: m = %.2f\tb = %.2f\trrp = %.2f", i, supplies[i].m, supplies[i].b, supplies[i].rrp);
+
+    }
+    if(DEBUG) printf("done.");
+
+    if(DEBUG) printf("\ngiving all items noise graphs...");
+    for(i=0; i<TOTAL_ITEMS; i++){
+
+        //  malloc space for noise graph and then fill it.
+        if((supplies[i].noise = malloc(LEN * sizeof(double))) == NULL){ puts("\nmain(): malloc failed."); exit(1); }       //  malloc space for hood map.
+        noise(supplies[i].noise, 0, LEN-1, 1, 0.0, 100.0);       //  noise values set between 0 to 100.
+    }
+    if(DEBUG) printf("done.");
+
+    //  nowshops can go shopping for their initial stock.
+    if(DEBUG) printf("\nshops are stocking up...");
+    //  another wall of text.  Using my SupplierPurchasing code here.
+    //*******************************************************************************
+    //  This makes every shop in the game run the SupplierPurchasing algorithm.  Hopefully it works. :/
+    for(j=0; j<totalshops; j++){
+/*
+        if(SHOWLIST){
+                puts("item\tquantity\tsize\tcost\tm\tb\tp_d");
+                puts("--------------------------------------------------------------");
+        }
+
+        if(SHOWLIST){
+            //for (i=0; i<TOTAL_ITEMS; i++){
+            puts("\nshowing 50 items only:");
+            for (i=0; i<50; i++){
+                profit_density = (((1.0 - supplies[i].b) / supplies[i].m) - supplies[i].cost) / (float)supplies[i].size;
+                printf("%u\t%u\t\t%u\t%.2f\t%.2f\t%.2f\t", i, supplies[i].quantity, supplies[i].size, supplies[i].cost, supplies[i].m, supplies[i].b);
+                if(profit_density < 0) puts("-");
+                else printf("%.2f\n", profit_density);
+            }
+        }
+*/
+        //  for each item, calculate the profit density of buying one more item.
+        //  if it's the highest value, buy it.  repeat while there are
+        //  opportunities to buy (items, space, cash, profit - available.)
+
+        do{
+            possible_flag       = 0;
+            best_item           = TOTAL_ITEMS;
+            best_profit_density = 0.0;
+
+            for (i = 0; i < TOTAL_ITEMS; i++){
+
+                    //  check that this item exists. if not, skip it.
+                    if(supplies[i].quantity == 0) continue;
+
+                    //  check if I can even store this item. if not, skip it.
+                    if(supplies[i].size > shopdb[j].space) continue;
+
+                    //  check if I can even afford this item.  This fails when you have no money and the item is free, so...
+                    if(supplies[i].cost > shopdb[j].money) continue;
+
+                    //  ... this line takes care of it.
+                    if(shopdb[j].money < 0.01) continue;
+
+                    //  calculate the profit density of one more item.
+                    profit_density = ((((1.0 + (float)supplies[i].bought) - supplies[i].b) / supplies[i].m) - supplies[i].cost) / (float)supplies[i].size;
+
+                    //  if item has negative profit density, skip it.
+                    if(profit_density <= 0.0) continue;
+
+                    //  if there's at least one item that exists, that I can afford and store, and that is profitable, then keep going next time.
+                    possible_flag = 1;
+
+                    //  if this profit/space ratio is greatest found so far, save it.
+                    if(profit_density > best_profit_density){
+                        best_profit_density = profit_density;
+                        best_item           = i;
+                    }
+            }
+
+            //  if something was found, buy it.
+            if(best_item != TOTAL_ITEMS){
+                shopdb[j].money  -= supplies[best_item].cost;
+                shopdb[j].space -= supplies[best_item].size;
+                supplies[best_item].quantity--;
+                supplies[best_item].bought++;
+            }
+
+        }while(possible_flag);
+/*
+        //  display what the shop bought.
+        puts("\n\nhere is what was bought:");
+        for(i=0; i<TOTAL_ITEMS; i++){
+            if(supplies[i].bought) printf("\n%u of item %u", supplies[i].bought, i);
+        }
+        putchar('\n');
+*/
+        //  clear the bought values, for the next store.
+        for(i=0; i<totalshops; i++) supplies[i].bought = 0;
+
+    }
+//*******************************************************************************
+    if(DEBUG) printf("done.");
 
     //puts("\n\nmap: streets, shops, doors, blocks:\n");
     //show(HEIGHT, WIDTH, map);
@@ -419,6 +661,7 @@ int main(void){
         }
     }
 
+    /*  Here is where I squash all the maps into a single 2d array of structs.  I haven't decided if I'll use this yet. */
     if(DEBUG) printf("\nsquashing maps...");
     //  time to squash all this into mapsquash.
     for(i=0; i<HEIGHT; i++){
@@ -548,7 +791,7 @@ int main(void){
 
         putchar('\n');
         if(*(map+player.position)==STREET) printf("\nyou are on %s, ", streetnames[stindexmap[player.position]-1]);
-        else if(*(map+player.position)==SHOP) printf("\nyou are in The Vermillion Minotaur, ", streetnames[stindexmap[player.position]-1]);
+        else if(*(map+player.position)==SHOP);
 
 //      if(map[player.position].type==STREET) printf("\nyou are on %s, ", map[player.position].street);   later on, use this style.  shorter and easier to read.
 
@@ -902,7 +1145,7 @@ unsigned shopmaker(unsigned height, unsigned width, char *map, char chance){
 
     free(mymap);
     free(potentialshops);
-    if(DEBUG) printf("\n\ttotalpotential shops: %u", totalpotentials);
+    if(DEBUG) printf("\n\ttotal potential shops: %u\n", totalpotentials);
     return totalshops;
 }
 
