@@ -127,7 +127,19 @@
                                 afford and store.  Things went without a problem at all so that's fucking awesome.
                                 Can't believe it's all in there.  About 1300 lines of code so far. :)
 
+            2015.11.2.22:54     A thought: if the supplier's list doesn't change, or more accurately, if items always
+                                have the same item index, and items never get deleted, then shop inventory lists could just
+                                be item indexes with quantity.  I wouldn't need to actually make copies of item info from
+                                the supplier.  If I shop wanted to access info on an item, it could just use its index number
+                                to access the supplier's db and find out name, size, etc.  it would only need to know how many
+                                it had of that item, and the sales history of it, and its shop price, and its own mnb values.
 
+            2015.11.3.01:50     I did what I said above, because there's no point in having copies like that.  Shops now actually
+                                have inventory linked lists.  When you enter a shop, that shop's details are displayed, and
+                                its inventory.  It's pretty awesome.  Next step is to have the shops  be able to sell to the
+                                NPC masses, and then do their price calculations.  This is where the biggest slow down will happen.
+
+                                Also, when the map is 10 x 30, it crashes.  So ....have fun fixing that.
 */
 
 #include <stdio.h>
@@ -140,8 +152,8 @@
     #define M_PI 3.14159265358979323
 #endif
 #define LEN 33                              //  must be 2^n+1. This is the width of the graphs I generate for weather.
-                                            //  this is currently being used for both length of graphs for item noise and for weather noise.
-                                            //  that might be a problem later.
+                                            //  This is currently being used for both length of graphs for item noise
+                                            //  and for weather noise. That might be a problem later.
 
 #define HEATMIN 30.0                        //  52.0.   These values will be calculated using yearly models later.
 #define HEATMAX 75.0                        //  90.0.
@@ -154,17 +166,18 @@
 #define BLOCK 3
 
 //  height and width of the entire map.
-#define HEIGHT 50                           //  H50 x W80 is a good working size.
-#define WIDTH  80
+#define HEIGHT 10                           //  H50 x W80 is a good working size.
+#define WIDTH  30
 
-#define MINBLOCKSIZE 3                      //  blocks are the BLOCKS that aren't streets.  This is the min length or width a block can be.
-#define SHOPCHANCE 60                       //  chance that a viable shop position actually becomes a shop.
-#define HOODSIZE 20                         //  minimum height and width of a neighbourhood.
+#define MINBLOCKSIZE 3                      //  A block is a group of BLOCK type cells.  This is the min. size they can be.
+#define SHOPCHANCE 60                       //  Chance that a viable shop position actually becomes a shop.
+#define HOODSIZE 5                         //  minimum height and width of a neighbourhood.
 
 #define NPC_POP (HEIGHT*WIDTH)              //  NPC population in game. using area of map as rough guide for now. approximates Aberdeen population.
 
 #define DEBUG 1                             //  toggle for debug info. 1=on, 0=off.
 #define SHOWLIST 1                          //  debug thing, shows supplierpurchasing working list.
+
 /***************************************************************************************************************/
 
 //  This is used to record what the last weather report was, to avoid reporting the same thing each time.
@@ -191,7 +204,8 @@ typedef struct _clocky {
     unsigned s;
 }clocky;
 
-//  a 'map unit'. an array of these makes a map.
+//  A 'map unit'. an array of these makes a map.
+//  This is only used for mapsquash.
 typedef struct _cell {
     char type;          //  whether the cell is street, shop, door, or block.
     char *hood;         //  name of neighbourhood.
@@ -208,51 +222,58 @@ typedef struct _cell {
     at a given time. an array of these makes a sales history of
     a particular item. The shop will then use this to calculate
     a better price for the item. */
-struct sales_record {
+typedef struct sales_record {
     double price;
     unsigned sales;
     unsigned time;                          //  not sure what type yet.
-};
+    struct sales_record *next;              //  points to next node in list.
+}sales_record;
 
-/*  This is the struct that holds info
-    about an item that a shop has. An
-    array these makes an inventory. */
-struct item_record {
-    char *name;
-    unsigned index;
-    unsigned size;
+/*  This is the struct that holds info about an item
+    that a shop has. A linked list of these makes an
+    inventory. If a shop requires more details about
+    the item, it can lookup the supplier's db using
+    the item's id number.   */
+typedef struct item_record {
+    unsigned id;                            //  number that identifies this item.
     unsigned quantity;
-    double price;
-    double m,n,b;                           //  the shop's estimate of the demand function for this item.
-    struct sales_record *sales_history;     //  This will be the head of a linked list probably.
-};
+    double price;                           //  shop's current selling price for this item.
+    double m,n,b;                           //  the shop's estimate of the demand function for this item.  sales = m(price) + n(time) + b.
+    sales_record *sales_history;            //  This will be the head of a linked list probably. also the root of this linked list.
+    sales_record *sales_history_end;        //  points to last node in the list.
+    struct item_record *next;               //  points to next node in list.
+}item_record;
 
-/*  This is everything that makes a shop.*/
-struct _shop {
-    char *name;
-    unsigned loc;
-    char *desc;
-    char open;
+/*  This is everything that makes a shop.
+    An array of these makes all shops.  */
+typedef struct shop {
+    char *name;                             //  name of this shop.
+    unsigned loc;                           //  position on the map.
+    char *desc;                             //  shop's description.
+    char open;                              //  whether the shop is open or not.
     unsigned space;                         //  max warehouse space.
     double money;                           //  total money the shop has.
-    struct item_record *inventory;          //  the shop's inventory.
+    item_record *inventory;                 //  the shop's inventory. the root of the linked list.
+    item_record *inventory_end;             //  points to the last node in the list.
+
                                             //  also somehow have opening/closing hours for the store
                                             //  here. add that when I know what format time takes.
-};
+}shop;
 
 //  A supplier's item.  An array of these
 //  makes the inventory of the supplier.
-struct supplier_item {
+//  I might just reuse item_record and scrap this.
+typedef struct supplier_item {
     char *name;
-    unsigned quantity;                      //  total items available for sale.
-    unsigned size;                          //  how much inventory space it would take to hold this item.
+    unsigned id;                            //  product ID.
+    unsigned size;
+    unsigned quantity;                      //  how many the supplier has.
     unsigned bought;                        //  number sold to the shop buying.  Shop uses this as scratch space to do its calculation.
     double cost;                            //  cost to purchase this item.
-    double m,b;                             //  the shop's estimate of the demand function for this item.
+    double m,n,b;                           //  the actual demand function for this item. Only the supplier knows this.
     double *noise;                          //  each item has an array filled with noise to add to its demand line.  You can loop it.
     double rrp;                             //  price recommended to shops to sell at initially.
-};
-
+}supplier_item;
 
 /***************************************************************************************************************/
 
@@ -266,11 +287,13 @@ void proper(char *str);                                                         
 void unproper(char *str);                                                       //  lowers the case of the first letter of given string.
 void display(unsigned r, unsigned c, char *map, unsigned pos);                  //  shows map with user on it.
 unsigned weatherreport(weather *last, double heat, double humidity, double wind, double cloud, clocky *c);
-void noise(double *array, unsigned start, unsigned end, unsigned level, double min, double max);
-void sinefiller(double *array, unsigned size, double min, double max);
-void insideshop(void);
-void look(cell *map, unsigned loc);                                             //  describes stuff seen around you.
 void noise(double *array, unsigned start, unsigned end, unsigned level, double min, double max);    //  fills an array with noise, using mid-placement algorithm.
+void sinefiller(double *array, unsigned size, double min, double max);
+void insideshop(shop *shopx);                                                   //  the dialog for the given shop.
+void look(cell *map, unsigned loc);                                             //  describes stuff seen around you.
+int stock_these(item_record **root, item_record **curr, item_record *n);        //  puts a set of items n into the shop's inventory. returns 1 if successful.
+//void show_linkedlist(shop *shopx);                                              //  shows me what's in a shop's inventory.
+
 
 /***************************************************************************************************************/
 
@@ -300,16 +323,20 @@ int main(void){
     char **hoodnames, **streetnames;                //  complete street and hood names.
 
     //  struct arrays for databases.
-    struct _shop *shopdb;                           //  Shop database.
-    struct supplier_item *supplies;                 //  Supplier's database.
+    shop *shopdb;                                   //  Shop database.
+    supplier_item *supplies;                        //  Supplier's database.
 
     //  variables for supplier purchasing algorithm.
     unsigned best_item;
-    unsigned possible_flag;                     //  indicates if I traversed the list and found no options. 0 if no options.
-    double profit_density;                      //  profit/space of item.
+    unsigned possible_flag;                         //  indicates if I traversed the list and found no options. 0 if no options.
+    double profit_density;                          //  profit/space of item.
     double best_profit_density;
     double profit_made;
     double spent;
+
+    //
+    item_record stock_this;                         //  when a shop buys a set of items from the supplier, I put that info into this struct.
+                                                    //  I then add this struct to the shop's inventory list.  It's temp space for the copy.
 
     srand(time(NULL));
 
@@ -340,12 +367,13 @@ int main(void){
 
     if(DEBUG) printf("\ncalling shopmaker...");
     totalshops = shopmaker(HEIGHT, WIDTH, map, SHOPCHANCE);                                                  //  find possible shop locations and place them.
-    if(DEBUG) printf("...done.");
+    if(DEBUG) printf("...done. there are %u total shops.", totalshops);
+
 
     //  now I know how many shops there are, I need to make an array of that many shops.
     //struct _shop shop[100];
     if(DEBUG) printf("\nmallocing shop database...");
-    if((shopdb = malloc(totalshops*sizeof(struct _shop))) == NULL){ puts("\nmain(): malloc failed."); exit(1); }       //  malloc space for hood map.
+    if((shopdb = malloc(totalshops*sizeof(shop))) == NULL){ puts("\nmain(): malloc failed."); exit(1); }       //  malloc space for hood map.
     if(DEBUG) printf("done.");
 
     //  walk through the map. Whenever I hit a
@@ -368,13 +396,14 @@ int main(void){
     for(i=0; i<totalshops; i++){
         shopdb[i].space = rand()%901 + 100;                                     //  100 to 1000 blocks of warehouse storage.
         shopdb[i].money = ((float)rand() / (float)(RAND_MAX)) * 900.0 + 100.0;  //  $100.00 to $1000.00 to each store initially.
+        shopdb[i].inventory = NULL;
     }
     if(DEBUG) printf("done.");
 
     //  malloc space for supplier. just hardcode # of supplies right now until things work,
     //  later on, put items into a separate file.
     if(DEBUG) printf("\nmallocing supplier database...");
-    if((supplies = malloc( TOTAL_ITEMS * sizeof(struct supplier_item))) == NULL){ puts("\nmain(): malloc failed."); exit(1); }       //  malloc space for hood map.
+    if((supplies = malloc( TOTAL_ITEMS * sizeof(supplier_item))) == NULL){ puts("\nmain(): malloc failed."); exit(1); }       //  malloc space for hood map.
     if(DEBUG) printf("done.");
 
     if(DEBUG) printf("\nfilling supplier database with garbage to sell...");
@@ -385,6 +414,7 @@ int main(void){
     //  I just want to get a working model up and running asap.
 
     for(i=0; i<TOTAL_ITEMS; i++){
+        supplies[i].id          = i;
         supplies[i].quantity    = rand() % 101;
         supplies[i].size        = rand() % 100 + 1;
         supplies[i].bought      = 0;
@@ -397,7 +427,7 @@ int main(void){
         //  minimum audience for a product is 5% of the population.  Just because.
         j = 5.0*NPC_POP/100.0;
         supplies[i].b           =  ((float)rand() / (float)(RAND_MAX)) * (NPC_POP - j) + j;
-
+        //  add something for 'n' later.
         supplies[i].m           = ((float)rand() / (float)(RAND_MAX)) * -3.5 - 3.5; //  gradient between -7 to -3.5.  Seems sensible.
         supplies[i].rrp         = supplies[i].b / -supplies[i].m;                   //  This is the midpoint of the line: optimal profit point.
 
@@ -421,6 +451,7 @@ int main(void){
     //*******************************************************************************
     //  This makes every shop in the game run the SupplierPurchasing algorithm.  Hopefully it works. :/
     for(j=0; j<totalshops; j++){
+
 /*
         if(SHOWLIST){
                 puts("item\tquantity\tsize\tcost\tm\tb\tp_d");
@@ -486,16 +517,25 @@ int main(void){
             }
 
         }while(possible_flag);
-/*
-        //  display what the shop bought.
-        puts("\n\nhere is what was bought:");
+
+    /*  Here is where I actually put the contents of the bought list
+        into the shop. build the linked list here. since this is the
+        first time, I don't need to do any list searching.  Just throw
+        it all in there.    */
+
+        //printf("\n\nhere is what shop %u bought:", j);
         for(i=0; i<TOTAL_ITEMS; i++){
-            if(supplies[i].bought) printf("\n%u of item %u", supplies[i].bought, i);
+            if(supplies[i].bought) {
+                stock_this.id       = supplies[i].id;
+                stock_this.price    = supplies[i].rrp;
+                stock_this.quantity = supplies[i].bought;
+
+                stock_these(&shopdb[j].inventory, &shopdb[j].inventory_end, &stock_this);     //  something like this should work.
+                supplies[i].bought=0;   //  clear item for next shop.
+            }
         }
-        putchar('\n');
-*/
-        //  clear the bought values, for the next store.
-        for(i=0; i<totalshops; i++) supplies[i].bought = 0;
+    //  putchar('\n');
+
 
     }
 //*******************************************************************************
@@ -649,7 +689,7 @@ int main(void){
 
     if(DEBUG) printf("done.");
 
-    if(DEBUG){
+/*  if(DEBUG){
         puts("\nhood names for this map:");
         for(i=0; i<hoodindex; i++){
             printf("\n\t%s", *(hoodnames+i));
@@ -660,6 +700,7 @@ int main(void){
             printf("\n\t%s", *(streetnames+i));
         }
     }
+*/
 
     /*  Here is where I squash all the maps into a single 2d array of structs.  I haven't decided if I'll use this yet. */
     if(DEBUG) printf("\nsquashing maps...");
@@ -765,6 +806,8 @@ int main(void){
     if(DEBUG) printf("\nentering infinite loop...\n\n");
     while(1){
 
+        system("cls");
+
         //  show map with user on it.
         display(HEIGHT, WIDTH, map, player.position);
 
@@ -791,7 +834,7 @@ int main(void){
 
         putchar('\n');
         if(*(map+player.position)==STREET) printf("\nyou are on %s, ", streetnames[stindexmap[player.position]-1]);
-        else if(*(map+player.position)==SHOP);
+        else if(*(map+player.position)==SHOP) printf("\nyou are in a shop, ");
 
 //      if(map[player.position].type==STREET) printf("\nyou are on %s, ", map[player.position].street);   later on, use this style.  shorter and easier to read.
 
@@ -800,22 +843,31 @@ int main(void){
         printf("\noptions: x ");
 
         if(player.position/WIDTH){
-            if(*(map+player.position-WIDTH)==STREET) printf("n ");
+            if(*(map+player.position-WIDTH)==STREET || *(map+player.position-WIDTH)==DOOR) printf("n ");
         }
 
         if(player.position/WIDTH!=HEIGHT-1){
-            if(*(map+player.position+WIDTH)==STREET) printf("s ");
+            if(*(map+player.position+WIDTH)==STREET || *(map+player.position+WIDTH)==DOOR) printf("s ");
         }
 
         if(player.position%WIDTH){
-            if(*(map+player.position-1)==STREET) printf("w ");
+            if(*(map+player.position-1)==STREET || *(map+player.position-1)==DOOR) printf("w ");
         }
 
         if(player.position%WIDTH!=WIDTH-1){
-            if(*(map+player.position+1)==STREET) printf("e");
+            if(*(map+player.position+1)==STREET || *(map+player.position+1)==DOOR) printf("e");
         }
 
-        if(*(map+player.position)==SHOP) insideshop();
+        if(*(map+player.position)==SHOP) {
+            //  search the shopdb for a .loc that matches this current map position.
+            //  Replace this later with something less retarded.
+            //  seriously, this is an embarrassing solution.
+            //  I'm in a hurry.
+            for(i=0; i<totalshops; i++) if(shopdb[i].loc == player.position) break;
+            if(i != totalshops) insideshop(&shopdb[i]);
+            else puts("\nI can't find the shop. :/");
+        }
+
         else if(*(map+player.position)==STREET) puts("\nYou are on the street.");
 
         printf("\n: ");
@@ -1422,9 +1474,47 @@ void sinefiller(double *array, unsigned size, double min, double max){
 }
 
 
+/*
+The dialog for the given shop.  Shows the shop's introduction,
+and inventory for sale.  Maybe other menu to sell to the shop.
+probably also deals with the transactions by user.
+*/
+void insideshop(shop *shopx){
+    item_record *scout;
 
-void insideshop(void){
-    puts("\nYou are in a shop.");
+    if(shopx == NULL) {
+        //  display null shop testing dialog.
+        puts("\nYou are in a NULL shop.  You're probably testing. :)\n");
+        puts("BILL THE BUTCHER");
+        puts("   fine meats   ");
+        puts("----------------");
+        puts("BUY     |      $");
+        puts("beef    |   4.56");
+        puts("tails   |   1.23");
+        puts("livers  |  14.30");
+        puts("bone    | 100.06");
+        puts("blood   |   0.07");
+
+        puts("\nwhat'll it be, sir?");
+        puts("don't respond. not ready yet. get out, sir.");
+    }
+
+    else{
+        printf("\nSHOP at %u", shopx->loc);
+        //printf("\nspace: %u", shopx->space);
+        //printf("\nmoney: %.2f", shopx->money);
+
+        puts("\n\nINVENTORY");
+        puts("---------");
+        //  display this shop's inventory list.
+        scout = shopx->inventory;
+        while(scout){
+            printf("\n{item %u} x %u\tprice = %.2f", scout->id, scout->quantity, scout->price);
+            scout = scout->next;
+        }
+    }
+
+
 }
 
 
@@ -1435,5 +1525,17 @@ void look(cell *map, unsigned loc){
     //if(map[loc]->d==SHOP) printf("\nThere is a shop to the south.");
 }
 
+/*  Puts the item n into the shop's inventory linked list. this doesn't
+    only add one item: item n has a quantity number to go with it. This
+    is currently used when the shop buys stuff from the supplier, but it
+    could be used for transactions with players I suppose.  */
+int stock_these(item_record **root, item_record **curr, item_record *n){
+    item_record *poop;
 
-
+    if((poop = malloc(sizeof(item_record))) == NULL) return 0;  //  make space for new data. return 0 on fail.
+    if(*root == NULL) *curr = *root = poop;                     //  if root NULL, data will go there.
+    else *curr = (*curr)->next = poop;                          //  otherwise, data will go in next spot.
+    **curr = *n;                                                //  copy data into new spot.
+    (*curr)->next = NULL;                                       //  NULL the list.
+    return 1;
+}
