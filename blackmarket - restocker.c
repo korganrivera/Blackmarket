@@ -230,7 +230,12 @@
                                 problem is it takes too long, since it's done on every move, so every shop is
                                 restocking and selling to the masses on every turn. so you can't really walk
                                 around because of the intermittent delay. Somehow need to schedule this
-                                happening.
+                                happening.  EDIT: I took out some debug statements and it runs a little quicker.
+
+            2015.11.10.01:44    If one move is 4 seconds, then 21600 moves is a real-time day. Obviously that's
+                                too much.  Also, make 2 previous weather report records, so that way I can leave
+                                the weather on all the time, and check that ti doesn't just keep repeating the
+                                same two weathers all the time.
 */
 
 /***************************************************************************************************************/
@@ -250,7 +255,7 @@
 
 #define HEATMIN     30.0                    //  52.0.   These values will be calculated using yearly models later.
 #define HEATMAX     75.0                    //  90.0.
-#define TOTAL_ITEMS 1000                    //  number of items the supplier holds.  replace this later when I read from a file.
+#define TOTAL_ITEMS 500                     //  number of items the supplier holds.  replace this later when I read from a file.
 
 //  some convenient aliases.
 #define STREET      0
@@ -273,16 +278,16 @@
 #define MAP_POPULATION  ((WIDTH*HEIGHT) * 7)
 
 #define MINBLOCKSIZE    3                               //  A block is a group of BLOCK type cells.  This is the min. size they can be.
-#define SHOPCHANCE      60                              //  Chance that a viable shop position actually becomes a shop.
+#define SHOPCHANCE      50                              //  Chance that a viable shop position actually becomes a shop.
 #define HOODSIZE        5                               //  minimum height and width of a neighbourhood.
 
 #define NPC_POP (HEIGHT*WIDTH)                          //  NPC population in game. using area of map as rough guide for now. approximates Aberdeen population.
 
-#define DEBUG           1                               //  toggle for debug info. 1=on, 0=off.
+#define DEBUG           0                               //  toggle for debug info. 1=on, 0=off.
 #define SHOWLIST        1                               //  debug thing, shows supplierpurchasing working list.
 
 #define CLOCK_ADVANCE   4                               //  number of seconds the clock advances every move. 4 seconds ~= 4mi/hour walking.
-#define WEATHER_REPORT_INTERVAL (CLOCK_ADVANCE * 10)    //  how often the weather is reported.  (CLOCK_ADVANCE * 10) means after every 10 steps.
+#define WEATHER_REPORT_INTERVAL (CLOCK_ADVANCE * 1)     //  how often the weather is reported.  (CLOCK_ADVANCE * 10) means after every 10 steps.
                                                         //  remember, if weather hasn't changed since last report, it isn't repeated. so
                                                         //  weather report every 10 steps is a maximum.
 /***************************************************************************************************************/
@@ -911,7 +916,7 @@ int main(void){
     if(DEBUG) printf("\nentering infinite loop...\n\n");
     while(1){
 
-      //system("cls");
+      system("cls");
 
     //  show map with user on it.
         display(HEIGHT, WIDTH, map, player.position);
@@ -1198,7 +1203,7 @@ int main(void){
 
 
 //  if the quantity of a thing is zero at the suppliers, put more there.
-    printf("supplier is restocking...");
+    if(DEBUG) printf("supplier is restocking...");
     for (i = 0; i < TOTAL_ITEMS; i++){
         if(supplies[i].bought == 0){
             supplies[i].quantity    = rand() % 100 + 1;
@@ -1206,14 +1211,15 @@ int main(void){
            // printf("\nsupplier's restocked {item %u}: %u items.", i, supplies[i].quantity);
         }
     }
-    puts("done.");
+    if(DEBUG) puts("done.");
 
 
     //  tell how may supplies are left at the suppliers.
-    count_supplies = 0;
-    for (i = 0; i < TOTAL_ITEMS; i++) count_supplies += supplies[i].quantity;
-    printf("there are %u items in the suppliers", count_supplies);
-
+    if(DEBUG) {
+        count_supplies = 0;
+        for (i = 0; i < TOTAL_ITEMS; i++) count_supplies += supplies[i].quantity;
+        printf("there are %u items in the suppliers", count_supplies);
+    }
 
     //  do some dumpster rotting.
     if(DEBUG) printf("\nrotting some dumpsters...");
@@ -1224,7 +1230,7 @@ int main(void){
             else dump[i][j].level -= dump[i][j].rot_amount;
         }
     }
-    puts("done.");
+    if(DEBUG) puts("done.");
 
         //  get user's input.
         printf("\n: ");
@@ -1835,7 +1841,7 @@ void insideshop(shop *shopx){
     }
 
     else{
-        printf("\nSHOP at %u", shopx->loc);
+        printf("\n\nSHOP at %u", shopx->loc);
         //printf("\nspace: %u", shopx->space);
         //printf("\nmoney: %.2f", shopx->money);
 
