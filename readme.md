@@ -1,8 +1,8 @@
 # Blackmarket
 Source for my text-based rpg with a dynamic economic model. Project in progress.
 
-If you want to play what I have so far, use mapmaker-weathertest.c, and the .txt files.  
-gcc mapmaker.c
+If you want to play what I have so far, use blackmarket-restocker.c, and the .txt files.  
+gcc blackmarket-restocker.c
 and put the .txt files in the same folder as your executable.  
 
 All you can do so far is walk around the map with the arrow keys.  A new map is generated each time you run it.  The map has streets with names, neighbourhoods with names, shops with doors.  Shops are generated, a main supplier to the shops is generated and the shops automatically stock themselves with the content of the supplier.  The shops buy the most profitable items that they can store and afford.  They calculate what price they'd able to sell any number of bought items for in their own neighbourhood.  This is based on their estimate of the current demand function for that item in their neighbourhood.  
