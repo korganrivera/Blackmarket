@@ -5,10 +5,28 @@ If you want to play what I have so far, use mapmaker-weathertest.c, and the .txt
 gcc mapmaker.c
 and put the .txt files in the same folder as your executable.  
 
-All you can do so far is walk around the map with the arrow keys.  A new map is generated each time you run it.  The map has streets with names, neighbourhoods with names, shops with doors.  The doors work but the shops are currently empty.  Still doing infrastructure.  The game gives you simulated weather updates as you walk around.  There is a crude turn-based clock so I could test the weather.  It tells you which street you're on and hood you're in as you walk around.
+All you can do so far is walk around the map with the arrow keys.  A new map is generated each time you run it.  The map has streets with names, neighbourhoods with names, shops with doors.  Shops are generated, a main supplier to the shops is generated and the shops automatically stock themselves with the content of the supplier.  The shops buy the most profitable items that they can store and afford.  They calculate what price they'd able to sell any number of bought items for in their own neighbourhood.  This is based on their estimate of the current demand function for that item in their neighbourhood.  
 
-2015.10.30
-I just finished a function that allows stores to buy the most profitable items from the supplier.  This took a while.  It sounds like the knapsack problem, but it's a little different.  Next step is to make shop databases, so shops can keep track of their own inventory.  Not sure how I'll do this yet.
+A items are sold in a hood, the demand will drop and the shop will have to drop the price to sell the same amount.  If demand increases, the shop can also raise the price.  This is all done automatically. 
 
-2015.11.01
-Just added the above algorithm to the game, and a bunch of databases.  The game now has a database of actual shops.  Each shop has its own inventory, and can track the sales history if every item.  The shops can also use my SupplierPurchasing algorithm to do their first stocking at the suppliers, where they buy the most profitable stuff they can within the limits of their warehouse space and cash.  That's pretty cool.  I've let the supplier give shops an initial rrp for items.  This rrp is based on a global desire for the product.  Oh, also every product in the game has its own desire values, and noise graph which will be used together to modify desire over time.  But this hasn't been utilised yet, it's still background stuff.  Anyway, I'd prefer each neighbourhood to have its own desire graphs for items, so you can take advantage of differences across the map, but I'll do that later.  Next step is to setup a working script for transactions when you walk into a store, and also have the stores restock on a frequent basis.
+Demand for an item in each hood increases and decreases according to how much of that item is sold there.  If an item isn't sold there for a while, demand will increase again.
+
+The game gives you simulated weather updates as you walk around.  There is a crude turn-based clock so I could test the weather.  It tells you which street you're on and hood you're in as you walk around.
+
+Shops have the infrastructure there to store a sales history for every item they sell.  They will use this to run linear regressions to predict the next best price for the items they're selling.  I haven't used this code so far however.  Currently, when the shop restocks at the suppliers, the supplier tells the shop the best price to sell its purchases at.  This might actually be a better method because I avoid running several hundred regression calculations.
+
+There's also noise graphs generated for every item in the game.  The intention is to add some noise to the demand of items but I haven't used this yet.
+
+PROBLEMS LIST
+-------------
+problem: shops stock up on every turn made, and that's the slowest part, so you can't walk around the map without having to wait on each step.  It's annoying.
+possible solution: make it happen less often than on every turn.  Have it scheduled, or come up with a way to only run the calculations when the input is idle for so long, or learn multithreading.
+
+problem: can't yet buy anything in the shop.
+solution: do that.
+
+problem: there is currently no game in the game.  it's just a simple economics simulation.
+possible solution: once the speed issue is fixed, put in basic enemies, weapons, armour, etc.
+
+
+
