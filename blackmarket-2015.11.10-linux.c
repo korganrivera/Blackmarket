@@ -334,7 +334,7 @@ char getche(void)
 #define SHOWLIST        1                               //  debug thing, shows supplierpurchasing working list.
 
 #define CLOCK_ADVANCE   4                               //  number of seconds the clock advances every move. 4 seconds ~= 4mi/hour walking.
-#define WEATHER_REPORT_INTERVAL (CLOCK_ADVANCE * 1)     //  how often the weather is reported.  (CLOCK_ADVANCE * 10) means after every 10 steps.
+#define WEATHER_REPORT_INTERVAL (CLOCK_ADVANCE * 3)     //  how often the weather is reported.  (CLOCK_ADVANCE * 10) means after every 10 steps.
                                                         //  remember, if weather hasn't changed since last report, it isn't repeated. so
                                                         //  weather report every 10 steps is a maximum.
 /***************************************************************************************************************/
