@@ -23,3 +23,14 @@
 		bone   100.06  | shield  1000.69    
 		blood    0.07  | boners   666.66
 		       
+
+	        BILL THE BUTCHER          
+	           fine meats   
+		----------------
+ 	        BUY     |      $    
+		----------------
+		beef    |   4.56  
+		tails   |   1.23  
+		livers  |  14.30  
+		bone    | 100.06  
+		blood   |   0.07  

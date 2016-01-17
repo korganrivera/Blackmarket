@@ -14,7 +14,7 @@
 #ifndef M_PI
     #define M_PI 3.14159265358979323
 #endif
-#define LEN 33          //  must be 2^n+1. This is the width of the graphs I generate.
+#define LEN 33          //  must be 2^n+1. This is the width of the graphs I generate using midplacement.
 #define HEATMIN 30.0    //  52.0.
 #define HEATMAX 75.0    //  90.0.
 #define DEBUG 0

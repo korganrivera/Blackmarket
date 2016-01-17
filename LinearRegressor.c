@@ -1,25 +1,35 @@
 /**
-    I'm going to try to write a general purpose linear regression thing.  You give the program some array of coordinates, and the program will
-    use multiple regression to give you the best fitting line or plane or whatever.  If you have 2-tuple coordinates, you need to give the program at least
-    2 pairs.  3-tuples, you need at least 3 of them, and so on.  If you have 3 3-tuples, you'll get a perfect fit.  If you have more you'll probably get a
-    regression.  In every case, the program will report the r^2.
-    User's array is read from a csv file.
-    psuedo: open file, check file formatting, check for correct number of rows and columns, count rows and columns, malloc space for arrays accordingly.
-    read file into arrays. Do the operation.  report results in correct form according to the n in n-tuple. report the r^2. done.
+    I'm going to try to write a general purpose linear regression thing.
+    You give the program some array of coordinates, and the program will use
+    multiple regression to give you the best fitting line or plane or whatever. If
+    you have 2-tuple coordinates, you need to give the program at least 2 pairs.
+    3-tuples, you need at least 3 of them, and so on. If you have 3 3-tuples, you'll
+    get a perfect fit. If you have more, you'll get a regression. In every case, the
+    program will report the r^2. User's array is read from a csv file.
+
+    pseudo: open file, check file formatting, check for correct
+    number of rows and columns, count rows and columns, malloc
+    space for arrays accordingly. read file into arrays. Do the
+    operation. report results in correct form according to the
+    n in n-tuple. report the r^2. done.
+
     2015.5.23.12:09 Got it working.  Need to add file reading functions, but the core of it works.  Pretty cool!
     2015.6.2.20:06  I lost the MyLinAlg.c file, and have to rewrite it.  So far there's something wrong with it. -_-
     2015.6.2.20:39  Okay fixed.  Actually ended up with a shorter function.  Not sure why the other one died.
 
     2015.6.6.12:16  Needs more testing.  Didn't give me correct answers on my last use.  Had a problem with a 10x2 matrix, transpose gave wrong answer and
                     r-squared came out negative @_@
+
+    2015.10.6.11:46 Messing with this.  It's filled with shit.  Doesn't work for a bunch of given problems.  Do i want to get into this again?
+                    Doesn't work with more than 3 columns.
 */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <C:\Users\K\Desktop\code\MyRepo\C\Blackmarket\MyLinAlg.c>
+#include "MyLinAlg.c"
 
-#define ROWS 10  //  make sure rows is >= COLS.
+#define ROWS 3  //  make sure rows is >= COLS.
 #define COLS 3
 
 int main(int argc, char *argv[]){
@@ -37,16 +47,9 @@ int main(int argc, char *argv[]){
     double transmult2[COLS][ROWS];                       //  transmult times xtrans.
 
     double matrix[ROWS][COLS]={       //  this is the shit that the user gives me.  I'll reuse the space once I move some stuff around.  It will be matrix x after that.
-        {8.0, 0.0, 100.4},
-        {12.0, 1.0, 104.01},
-        {18.0, 2.0, 97.49},
-        {20.0, 3.0, 87.41},
-        {4.0, 4, 97.63},
-        {10.0, 5, 88.41},
-        {9.0, 6, 96.41},
-        {12.0, 7, 102.17},
-        {3.0, 8, 116.29},
-        {14.0, 9, 97.32}
+        {12, 3, 204},
+        {2, 11, 445},
+        {11, 0, 45}
     };
 
     //  calculate average of actual y values for r-squared later.
@@ -75,7 +78,7 @@ int main(int argc, char *argv[]){
     multiply(COLS,ROWS,ROWS,COLS,&xtrans[0][0],&matrix[0][0],&transmult[0][0]);
 
     puts("\nmultiply transpose with x:");
-    echoarray(COLS,COLS,&transmult[0][0]);
+    echoarray(COLS,COLS,&transmult[0][0]);-
 
     //  invert 'transmult'.
     inverse(COLS, &transmult[0][0]);

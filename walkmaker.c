@@ -39,11 +39,11 @@
 #define DOOR 2
 #define BLOCK 3
 
-#define HEIGHT 130 //130
-#define WIDTH  390 // 780
+#define HEIGHT 40 //130
+#define WIDTH  200 // 780
 
 #define MAXBLOCKSIZE 4
-#define SHOPCHANCE 100
+#define SHOPCHANCE 66
 
 void streetmaker(unsigned x1,unsigned y1,unsigned x2,unsigned y2, char *map, unsigned blocksize, unsigned widthofmainmap);
 void show(unsigned r, unsigned c, char *map);
@@ -52,23 +52,94 @@ void shopmaker(unsigned height, unsigned width, char *map, char chance);
 unsigned hcount;
 unsigned vcount;
 
+typedef struct _user {
+    int position;       //  index of map where user character is.
+}user;
+
+
 int main(void){
     unsigned i, j;
     char *map;
-
+    unsigned position;
     srand(time(NULL));
+    user player;
+    char input;
 
     if((map = malloc(HEIGHT*WIDTH)) == NULL){ puts("\nmain(): malloc failed."); exit(1); }      //  malloc space for map.
     for(i=0; i<WIDTH*HEIGHT; i++) *(map+i) = BLOCK;                                             //  initialise map with all blocks.
     hcount=vcount=0;                                                                            //  initialise horizontal and vertical cut counters.
     streetmaker(0,0,HEIGHT-1, WIDTH-1, map, MAXBLOCKSIZE, WIDTH);                               //  build streets.
     //printf("\nSTREETMAKER %u x %u map\n\n", HEIGHT, WIDTH);                                   //  display  city.
-    //show(HEIGHT, WIDTH, map);
+    show(HEIGHT, WIDTH, map);
     //printf("\n\nhcount=%u, vcount=%u\n\n", hcount, vcount);                                   //  display number of horizontal and vertical cuts, just to check.
 
     shopmaker(HEIGHT, WIDTH, map, SHOPCHANCE);
     puts("\n\nafter returning from shopmaker:\n");
     show(HEIGHT, WIDTH, map);
+
+    //  put user in random place.  actually, just put him on the first piece of street from top left.  do this better later.
+    for(i=0; i<HEIGHT*WIDTH; i++) if(*(map+i)==STREET) break;
+    player.position = i;
+
+    while(1){
+        printf("\nYou are at position %d.", player.position);
+        if(*(map+player.position)==SHOP) puts("\nYou are in a shop.");
+        else if(*(map+player.position)==STREET) puts("\nYou are on the street.");
+
+        if(player.position/WIDTH){
+            if(*(map+player.position-WIDTH)==STREET) puts("\nyou can go north.");
+            else if(*(map+player.position-WIDTH)==DOOR) puts("\nthere is a door to the north.");
+        }
+
+        if(player.position/WIDTH!=HEIGHT-1){
+            if(*(map+player.position+WIDTH)==STREET) puts("\nyou can go south.");
+            else if(*(map+player.position+WIDTH)==DOOR) puts("\nthere is a door to the south.");
+        }
+
+        if(player.position%WIDTH){
+            if(*(map+player.position-1)==STREET) puts("\nyou can go west.");
+            else if(*(map+player.position-1)==DOOR) puts("\nthere is a door to the west.");
+        }
+
+        if(player.position%WIDTH!=WIDTH-1){
+            if(*(map+player.position+1)==STREET) puts("\nyou can go east.");
+            else if(*(map+player.position+1)==DOOR) puts("\nthere is a door to the east.");
+        }
+
+        printf("\n: ");
+        input=getchar();
+        fflush(stdin);
+
+        if(input=='x') exit(0);
+
+        if(input=='n'){
+            if(*(map+player.position-WIDTH)==DOOR) player.position -= 2*WIDTH;
+            else if(player.position/WIDTH==0) puts("\nyou can't go any further north.");
+            else if(*(map+player.position-WIDTH)!=STREET) puts("\nthere's a building there.");
+            else player.position -= WIDTH;
+        }
+
+        if(input=='s'){
+            if(*(map+player.position+WIDTH)==DOOR) player.position += 2*WIDTH;
+            else if(player.position/WIDTH==HEIGHT-1) puts("\nyou can't go any further south.");
+            else if(*(map+player.position+WIDTH)!=STREET) puts("\nthere's a building there.");
+            else player.position += WIDTH;
+        }
+
+        if(input=='w'){
+            if(*(map+player.position-1)==DOOR) player.position -= 2;
+            else if(player.position%WIDTH==0) puts("\nyou can't go any further west.");
+            else if(*(map+player.position-1)!=STREET) puts("\nthere's a building there.");
+            else player.position -= 1;
+        }
+
+        if(input=='e'){
+            if(*(map+player.position+1)==DOOR) player.position += 2;
+            else if(player.position%WIDTH==WIDTH-1) puts("\nyou can't go any further east.");
+            else if(*(map+player.position+1)!=STREET) puts("\nthere's a building there.");
+            else player.position += 1;
+        }
+    }
 }
 
 

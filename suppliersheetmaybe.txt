@@ -1,0 +1,16 @@
+# csv file to hold the stock of the supplier in
+# the game. lines starting with '#' are comments
+# and should be ignored by the parser.
+
+#                               quantity        initial
+# index |   item name       |   available   |   rrp     |   size    |   cost
+# ----------------------------------------------------------------------------
+    0       "gun of rail"       100             407.3       8           400.00
+    1       "cocaine"           1300            50.00       1           10.00
+    2       "quick urn"         5               3000.00     2           1234.00
+
+shop will come to supplier, and choose the best combo of items within its size and financial limits.
+should i load this table into game at start?  will this table change during runtime?
+if crafting is a thing, and a new item finds its way to the supplier, then yes.
+should each shop have a file like this of its own?  should i include the items location in the game?
+do items have other properties that I need to include?

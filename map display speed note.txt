@@ -1,0 +1,11 @@
+Which is faster to display, wide rectangles or tall rectangles?
+10000 blocks total. (displayed 100 times each.)
+
+  H x W		average display time
+---------------------------------------------
+200 x 50	: 1.110540 secs	
+100 x 100 	: 1.201080 secs (~ 9% slower)
+ 50 x 200 	: 1.533310 secs (~38% slower)
+
+So wide maps display slower than tall ones.
+

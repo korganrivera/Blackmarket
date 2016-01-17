@@ -1,0 +1,5 @@
+i need a function that takes an item from the supplier, and the current shop's *inventory, and adds the item to that list.
+
+i need a blank inventory record that is just the first node in the list. uh bored.
+
+more fun:  how are shop scripts going to work?  

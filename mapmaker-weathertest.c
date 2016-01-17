@@ -139,8 +139,21 @@
                                 its inventory.  It's pretty awesome.  Next step is to have the shops  be able to sell to the
                                 NPC masses, and then do their price calculations.  This is where the biggest slow down will happen.
 
-                                Also, when the map is 10 x 30, it crashes.  So ....have fun fixing that.
+            2015.11.4.13:59     I noticed that the clock moves forward even if you walk into a wall.
+                                That shouldn't happen. Not important right now though. Next step is to have the
+                                NPC masses buy shit from the shops. Iterate through all the stores, using the
+                                stores price, figure out how many sales the masses would take, remove that
+                                number from the inventory, and repeat for every item. I need to decide at what
+                                rate the customers do this. I mean, I could do this every complete game day, or
+                                every game week, etc. How often do customers do this, and shops restock, and so
+                                on? Uh.
+
+                                let's try updating the prices of all items after every turn.
+
+
+
 */
+
 
 #include <stdio.h>
 #include <time.h>
@@ -166,8 +179,8 @@
 #define BLOCK 3
 
 //  height and width of the entire map.
-#define HEIGHT 10                           //  H50 x W80 is a good working size.
-#define WIDTH  30
+#define HEIGHT 40                           //  H50 x W80 is a good working size.
+#define WIDTH  50
 
 #define MINBLOCKSIZE 3                      //  A block is a group of BLOCK type cells.  This is the min. size they can be.
 #define SHOPCHANCE 60                       //  Chance that a viable shop position actually becomes a shop.
@@ -913,6 +926,51 @@ int main(void){
             else if(*(map+player.position+1)!=STREET) puts("\nthere's a building there.");
             else player.position += 1;
         }
+
+        //  update price of all items in the game.  do this by going through all the shops' inventories,
+        //  so only do it to items shops are currently working with.  this is a mindfuck.
+        //  also ...actually, all items in the supplier's list have to be updated.
+        //  do all those, then just copy numbers over to the shops.
+
+        //  update supplier's prices.
+        for(i=0; i<TOTAL_ITEMS; i++){
+            //  since I don't know how time works yet in this game, I'll just use noise and the line function.
+            //  actually, I'm supposed to use time as the index in the noise function.  fffff.
+            //  assume time was just a long unsigned that incremented after every move by 1 minute.
+            //  users would be limited to 2^64 moves, or, if I loop it, the function that fits prices
+            //  would fail when it loops over. I don't want either of those things to happen.
+            //  i could rename the time in the sales record.  the first five records would have time
+            //  0,1,2,3,4.  when i get a new record to replace the last one, just keep the time as 0,1,2,3,4.
+            //  maybe then I don't need time. maybe just something that loops for weather and seasons and time of day.
+            //  and then fuck whatever else I had in mind.  fuck this sucks.
+
+
+/*
+typedef struct supplier_item {
+    char *name;
+    unsigned id;                            //  product ID.
+    unsigned size;
+    unsigned quantity;                      //  how many the supplier has.
+    unsigned bought;                        //  number sold to the shop buying.  Shop uses this as scratch space to do its calculation.
+    double cost;                            //  cost to purchase this item.
+    double m,n,b;                           //  the actual demand function for this item. Only the supplier knows this.
+    double *noise;                          //  each item has an array filled with noise to add to its demand line.  You can loop it.
+    double rrp;                             //  price recommended to shops to sell at initially.
+}supplier_item;
+
+
+*/
+
+
+
+
+        }
+
+
+
+
+
+
     }
 
 //  ----------^--------big ugly game, just for testing------------^------------------

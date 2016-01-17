@@ -199,43 +199,7 @@
 
             2015.11.8.03:11     Now I can see shopzero stuff.  it somehow needs to spread its sales throughout the day at least.
 
-            2015.11.9.03:12     Almost exactly 24 hours since I last wrote :)
-                                I'm thinking that NPCs buying from the shop might have to be
-                                a probabilistic activity. The problem is this: Say an item is supposed to sell 6
-                                items over the course of a week. Say I handle this daily, and so each day, the
-                                shop sells 0.857 of this item. That's going to be rounded to zero. So the shop
-                                will sell zero over the course of a week. Obviously, that's fucking stupid.
-                                Instead, I could say that over the course of a week, the shop is likely to sell
-                                6 on average. So that could happen in a bunch of different ways: all 6 on one
-                                day, or 1 each day except one, etc. However, this means I'd have to rewrite some
-                                stuff. It also doesn't guarantee that the item would sell this many times.  As
-                                items are sold, I just change the probability as it goes.  Seems like a shitty
-                                way to do it though.  I have to rethink a whole bunch of shit.
 
-            2015.11.9.15:22     What is is about 12 hour cycles?
-                                One thing that might be a problem that I've noticed: shops
-                                buy items based on their profit density. However, there might be a favourable
-                                profit density for selling less than 1 item, since it's a double calculation.
-                                But that means I'd never sell that item. It has to be at least one sale, since
-                                it becomes an unsigned value. Need to address that at some point.
-
-            2015.11.9.16:11     I solved it sort of.  I checked to see if the shop would need to sell less than 1
-                                item at the calculated price.  If so, it abandons buying it.  I'd rather it could
-                                go back and pick the next most profitable item which might have been legit.
-                                This program is a fuck up.
-
-            2015.11.10.01:44    Suppliers fill with shit, shops stock themselves, then
-                                sell to NPC masses, supplier restocks itself, dumpsters fill when sold to,
-                                dumpsters rot themselves. inventory seems to be flowing around pretty well. The
-                                problem is it takes too long, since it's done on every move, so every shop is
-                                restocking and selling to the masses on every turn. so you can't really walk
-                                around because of the intermittent delay. Somehow need to schedule this
-                                happening.  EDIT: I took out some debug statements and it runs a little quicker.
-
-            2015.11.10.01:44    If one move is 4 seconds, then 21600 moves is a real-time day. Obviously that's
-                                too much.  Also, make 2 previous weather report records, so that way I can leave
-                                the weather on all the time, and check that it doesn't just keep repeating the
-                                same two weathers all the time.
 */
 
 /***************************************************************************************************************/
@@ -255,7 +219,7 @@
 
 #define HEATMIN     30.0                    //  52.0.   These values will be calculated using yearly models later.
 #define HEATMAX     75.0                    //  90.0.
-#define TOTAL_ITEMS 500                     //  number of items the supplier holds.  replace this later when I read from a file.
+#define TOTAL_ITEMS 1000                    //  number of items the supplier holds.  replace this later when I read from a file.
 
 //  some convenient aliases.
 #define STREET      0
@@ -278,7 +242,7 @@
 #define MAP_POPULATION  ((WIDTH*HEIGHT) * 7)
 
 #define MINBLOCKSIZE    3                               //  A block is a group of BLOCK type cells.  This is the min. size they can be.
-#define SHOPCHANCE      50                              //  Chance that a viable shop position actually becomes a shop.
+#define SHOPCHANCE      60                              //  Chance that a viable shop position actually becomes a shop.
 #define HOODSIZE        5                               //  minimum height and width of a neighbourhood.
 
 #define NPC_POP (HEIGHT*WIDTH)                          //  NPC population in game. using area of map as rough guide for now. approximates Aberdeen population.
@@ -287,7 +251,7 @@
 #define SHOWLIST        1                               //  debug thing, shows supplierpurchasing working list.
 
 #define CLOCK_ADVANCE   4                               //  number of seconds the clock advances every move. 4 seconds ~= 4mi/hour walking.
-#define WEATHER_REPORT_INTERVAL (CLOCK_ADVANCE * 1)     //  how often the weather is reported.  (CLOCK_ADVANCE * 10) means after every 10 steps.
+#define WEATHER_REPORT_INTERVAL (CLOCK_ADVANCE * 10)    //  how often the weather is reported.  (CLOCK_ADVANCE * 10) means after every 10 steps.
                                                         //  remember, if weather hasn't changed since last report, it isn't repeated. so
                                                         //  weather report every 10 steps is a maximum.
 /***************************************************************************************************************/
@@ -298,7 +262,6 @@ typedef struct _weather {
         unsigned heat;
         unsigned cloud;
         unsigned temp;
-        unsigned sun_riseset;
         unsigned firsttime;
         unsigned tod;
         unsigned wind;
@@ -350,7 +313,6 @@ typedef struct sales_record {
 typedef struct item_record {
     unsigned id;                            //  number that identifies this item.
     unsigned quantity;
-    unsigned size;
     double price;                           //  shop's current selling price for this item.
     double m,n,b;                           //  the shop's estimate of the demand function for this item.  sales = m(price) + n(time) + b.
     sales_record *sales_history;            //  This will be the head of a linked list probably. also the root of this linked list.
@@ -365,7 +327,6 @@ typedef struct shop {
     unsigned loc;                           //  position on the map.
     char *desc;                             //  shop's description.
     char open;                              //  whether the shop is open or not.
-    int used_space;
     unsigned space;                         //  max warehouse space.
     double money;                           //  total money the shop has.
     item_record *inventory;                 //  the shop's inventory. the root of the linked list.
@@ -383,10 +344,8 @@ typedef struct supplier_item {
     unsigned id;                            //  product ID.
     unsigned size;
     unsigned quantity;                      //  how many the supplier has.
-    unsigned have;                          //  quantity shop already owns. Each shop uses this as scratch space.
     unsigned bought;                        //  number sold to the shop buying.  Shop uses this as scratch space to do its calculation.
     double cost;                            //  cost to purchase this item.
-    double spent;                           //  how much the items cost in the shopping cart.
     double m,n,b;                           //  the actual demand function for this item. Only the supplier knows this.
     double *noise;                          //  each item has an array filled with noise to add to its demand line.  You can loop it.
     double rrp;                             //  price recommended to shops to sell at initially.
@@ -398,7 +357,7 @@ typedef struct supplier_item {
 typedef struct dumpster {
     unsigned size;          //  size of dumpster. max capacity of it.
     unsigned level;         //  current fullness of it.
-    unsigned rot_amount;    //  amount by which content decays each turn.
+    double rot_rate;        //  rate at which contents decays.
 }dumpster;
 
 /***************************************************************************************************************/
@@ -456,7 +415,6 @@ int main(void){
     //  variables for supplier purchasing algorithm.
     unsigned best_item;
     unsigned possible_flag;                         //  indicates if I traversed the list and found no options. 0 if no options.
-    unsigned found;                                 //  flags if I already have a record of this item in the shop inventory, even if quantity is zero.
     double profit_density;                          //  profit/space of item.
     double best_profit_density;
     double profit_made;
@@ -464,7 +422,7 @@ int main(void){
 
     //  for stocking up.
     item_record stock_this;                         //  when a shop buys a set of items from the supplier, I put that info into this struct.
-    double required_price;                          //  I then add this struct to the shop's inventory list.  It's temp space for the copy.
+                                                    //  I then add this struct to the shop's inventory list.  It's temp space for the copy.
 
     //  dumpster stuff.
     dumpster **dump;                                //  this'll be a 2d array, when I know the number of hoods and total items. dump[total items][# of hoods].
@@ -478,9 +436,7 @@ int main(void){
     unsigned current_hood;                          //  when selling items to masses, shops use this to identify their hood.
     unsigned current_dumpster_size, current_dumpster_level;
     int current_sales;
-    double current_price, current_revenue, current_profit;
-    unsigned count_supplies;
-
+    unsigned current_price;
     item_record *curr_item;                          //  used when I'm traversing each shop's inventory list.
 
 
@@ -540,7 +496,7 @@ int main(void){
     }
     if(DEBUG) printf("done.");
 
-    //printf("\n\tshopzero's location is %u", shopdb[0].loc);
+    printf("\nshopzero's location is %u", shopdb[0].loc);
 
 /*  I need to give shops some money and some space. I'm
     just going to give them random values for now. later
@@ -548,7 +504,6 @@ int main(void){
     there are better areas to own a shop in.    */
     if(DEBUG) printf("\ndishing out cash and warehouse space to shops...");
     for (i = 0; i < totalshops; i++){
-        shopdb[i].used_space = 0;
         shopdb[i].space = rand()%901 + 100;                                     //  100 to 1000 blocks of warehouse storage.
         shopdb[i].money = ((float)rand() / (float)(RAND_MAX)) * 900.0 + 100.0;  //  $100.00 to $1000.00 to each store initially.
         shopdb[i].inventory = NULL;
@@ -556,7 +511,7 @@ int main(void){
     //show(HEIGHT, WIDTH, map);
     if(DEBUG) printf("done.");
 
-    //printf("\n\tshopzero's initial space, money: %u, %.2f", shopdb[0].space, shopdb[0].money);
+    printf("\nshopzero's initial space, money: %u, %.2f", shopdb[0].space, shopdb[0].money);
 
     if(DEBUG) printf("\ncalling hoodmaker...");
     hoodindex = hoodmaker(nhood, 0, 0, HEIGHT-1, WIDTH-1, HEIGHT, WIDTH, HOODSIZE, 0);          //  build the hood map, returns number of hoods made.
@@ -573,7 +528,6 @@ int main(void){
     //ushow(stindexmap, HEIGHT, WIDTH);
     //if(DEBUG) getche();
 
-
     //  measure size of hoods.  Used to allocate population to each hood.
     if(DEBUG) printf("\nmeasuring hood sizes...");
     if((hood_sizes = malloc((hoodindex) * sizeof(unsigned))) == NULL){ puts("\nmain(): malloc failed."); exit(1); }
@@ -587,8 +541,8 @@ int main(void){
     }   */
     if(DEBUG) printf("done.");
 
-    //printf("\n\tshopzero's hood number is %u", nhood[shopdb[0].loc]);
-    //printf("\n\tthe size of this hood is %u", *(hood_sizes + nhood[shopdb[0].loc]));
+    printf("\nshopzero's hood number is %u", nhood[shopdb[0].loc]);
+    printf("\nthe size of this hood is %u", *(hood_sizes + nhood[shopdb[0].loc]));
 
 /*  malloc space for supplier. just hardcode # of supplies right now
     until things work, later on, put items into a separate file.    */
@@ -602,27 +556,24 @@ int main(void){
 
     for (i = 0; i < TOTAL_ITEMS; i++){
         supplies[i].id          = i;
-        supplies[i].quantity    = rand() % 100 + 1;
+        supplies[i].quantity    = rand() % 101;
         supplies[i].size        = rand() % 100 + 1;
         supplies[i].bought      = 0;
-        supplies[i].have        = 0;
         supplies[i].cost        = ((float)rand() / (float)(RAND_MAX)) * 100.0;      //  items cost $0 to $100.
+
+        //  minimum audience for a product is 5% of the population.  Just because.
+        j = 5.0*NPC_POP/100.0;
 
     /*  initialising b for now, but it's set later when I know the shop's hood.
         this line is probably unnecessary.  */
         supplies[i].b           = 0;
+
         //  add something for 'n' later.
+
         supplies[i].m           = ((float)rand() / (float)(RAND_MAX)) * -3.5 - 3.5; //  gradient between -7 to -3.5.  Seems sensible.
     }
     if(DEBUG) printf("done.");
 
-    //  display a few of the items to see if it's good.
-    //puts("\nsample of supplier's items\n\nid\t#\tsize\tcost\tb\tm");
-    //for(i=0; i<50; i++){
-    //    printf("\n%u\t%u\t%u\t%.2f\t%.2f\t%.2f", supplies[i].id, supplies[i].quantity, supplies[i].size, supplies[i].cost, supplies[i].b, supplies[i].m);
-   // }
-    //puts("\npress key to continue");
-    //getch();
 
     if(DEBUG) printf("\ngiving all items noise graphs...");
     for (i = 0; i < TOTAL_ITEMS; i++){
@@ -650,14 +601,134 @@ int main(void){
     if(DEBUG) printf("\nsetting up dumpsters...");
     for (i = 0; i < TOTAL_ITEMS; i++){
         for (j = 0; j < hoodindex; j++){
+            dump[i][j].rot_rate = ((float)rand() / (float)(RAND_MAX)) * 0.9 + 0.05;             //  rot rate is between 0.05 and 0.95. avoids 0 and 1.
+
             //  right now, the dumpster size for every item is the size of the hood's population.
             //  this isn't very good because it needs to adapt to the item also.
             //  so I'll multiply it by the size of the item for now. meh.
-            dump[i][j].size     = (float)*(hood_sizes + j) / (HEIGHT*WIDTH) * MAP_POPULATION;
-            dump[i][j].rot_amount = rand()%dump[i][j].size + 1;             //  dumpster rots by some number between 1 and its full size.
+            dump[i][j].size     = (float)supplies[i].size * (float)*(hood_sizes + j) / (HEIGHT*WIDTH) * MAP_POPULATION;
         }
     }
 
+/*  //  display dumpster table to check it.
+    for (i = 0; i < TOTAL_ITEMS; i++){
+        for (j = 0; j < hoodindex; j++){
+            printf("\nitem %u hood %u: size=%u, rot_rate=%.2f", i,j,dump[i][j].size, dump[i][j].rot_rate);
+        }
+    getch();
+    }   */
+    if(DEBUG) printf("done.");
+
+
+/*  Make all shops stock up for the first time,
+    using my SupplierPurchasing algorithm.  */
+    if(DEBUG) printf("\nshops are stocking up...");
+    for (j = 0; j < totalshops; j++){
+
+/*
+        if(SHOWLIST){
+            puts("item\tquantity\tsize\tcost\tm\tb\tp_d");
+            puts("--------------------------------------------------------------");
+
+            for (i = 0; i < TOTAL_ITEMS; i++){
+                puts("\nshowing 50 items only:");
+                for (i = 0; i < 50; i++){
+                    profit_density = (((1.0 - supplies[i].b) / supplies[i].m) - supplies[i].cost) / (float)supplies[i].size;
+                    printf("%u\t%u\t\t%u\t%.2f\t%.2f\t%.2f\t", i, supplies[i].quantity, supplies[i].size, supplies[i].cost, supplies[i].m, supplies[i].b);
+                    if(profit_density < 0) puts("-");
+                    else printf("%.2f\n", profit_density);
+                }
+            }
+        }
+*/
+    //  get shop's hood number. Needed to calculate rrp and b.
+        current_hood = *(nhood + shopdb[j].loc);
+
+    /*  This is what's about to happen. For each item, I calculate the profit density
+        of buying one more item. If that density is the highest in all the list, the
+        shop buys that product at that quantity. Checks are made that the quantity is
+        available to buy, and the shop has money and space. */
+        do{
+            possible_flag       = 0;
+            best_item           = TOTAL_ITEMS;
+            best_profit_density = 0.0;
+
+            for (i = 0; i < TOTAL_ITEMS; i++){
+
+                    //  check that this item exists. if not, skip it.
+                    if(supplies[i].quantity == 0) continue;
+
+                    //  check if I can even store this item. if not, skip it.
+                    if(supplies[i].size > shopdb[j].space) continue;
+
+                    //  check if I can even afford this item.  This fails when you have no money and the item is free, so...
+                    if(supplies[i].cost > shopdb[j].money) continue;
+
+                    //  ... this line takes care of it.
+                    if(shopdb[j].money < 0.01) continue;
+
+                /*  calculate the item's b value, based on shop's location. b
+                    is equal to the population of that hood, which happens to
+                    be the same size as that hood's dumpster for that item. */
+                    supplies[i].b = dump[i][current_hood].size;
+
+                //  calculate the profit density of one more item.
+                    profit_density = ((((1.0 + (float)supplies[i].bought) - supplies[i].b) / supplies[i].m) - supplies[i].cost) / (float)supplies[i].size;
+
+                //  if item has negative profit density, skip it.
+                    if(profit_density <= 0.0) continue;
+
+                //  if there's at least one item that exists, that I can afford and store, and that is profitable, then keep going next time.
+                    possible_flag = 1;
+
+                //  if this profit/space ratio is greatest found so far, save it.
+                    if(profit_density > best_profit_density){
+                        best_profit_density = profit_density;
+                        best_item           = i;
+                    }
+            }
+
+        //  if something was found, buy it.
+            if(best_item != TOTAL_ITEMS){
+                shopdb[j].money  -= supplies[best_item].cost;
+                shopdb[j].space -= supplies[best_item].size;
+                supplies[best_item].quantity--;
+                supplies[best_item].bought++;
+            }
+
+        }while(possible_flag);
+
+    /*  Here is where I actually put the contents of the bought list
+        into the shop.  */
+        //printf("\n\nhere is what shop %u bought:", j);
+        for (i = 0; i < TOTAL_ITEMS; i++){
+            if(supplies[i].bought) {
+                stock_this.id       = supplies[i].id;
+                stock_this.quantity = supplies[i].bought;
+                stock_this.m        = supplies[i].m;
+                stock_this.n        = supplies[i].n;
+                stock_this.b        = supplies[i].b;
+
+            /*  set the price for the shop. if the shop has bought >=
+                the optimal amount of items, then give him the optimal
+                price. if he has less, give him the best price to sell
+                this much stock.    */
+                if(stock_this.quantity >= (stock_this.b / 2))
+                    stock_this.price = -stock_this.b/(2 * stock_this.m);
+                else
+                    stock_this.price = ((float)stock_this.quantity - stock_this.b) / stock_this.m;
+
+            //  put the chosen quantity of the item into the shop.
+                stock_these(&shopdb[j].inventory, &shopdb[j].inventory_end, &stock_this);
+            //  clear item for next shop.
+                supplies[i].bought  = 0;
+            }
+        }
+    }
+    if(DEBUG) printf("done.");
+
+    puts("\nhere is shopzero's initial inventory:");
+    insideshop(&shopdb[0]);
 
 //  Read all text files containing words that I use to build street and hood names.
     if(DEBUG) printf("\nreading files...");
@@ -702,7 +773,7 @@ int main(void){
     }
     if(DEBUG) printf("done.");
 
-    //printf("\n\tshopzero's hoodname is %s", *(hoodnames + (*(nhood + shopdb[0].loc))));
+    printf("\nshopzero's hoodname is %s", *(hoodnames + (*(nhood + shopdb[0].loc))));
 
 
 
@@ -895,9 +966,9 @@ int main(void){
     noise(wind,     0, LEN-1, 1, 0.0, 88.1);        //  set wind values between 0-88.1, using the Beufort scale.
     noise(cloud,    0, LEN-1, 1, 0.0, 81.0);        //  set cloud values between 0-100%.
 
-    myclock.h = 5;
-    myclock.m = 59;
-    myclock.s = 59;
+    myclock.h = 0;
+    myclock.m = 0;
+    myclock.s = 0;
 
 
 
@@ -917,7 +988,7 @@ int main(void){
     if(DEBUG) printf("\nentering infinite loop...\n\n");
     while(1){
 
-      system("cls");
+        //system("cls");
 
     //  show map with user on it.
         display(HEIGHT, WIDTH, map, player.position);
@@ -927,7 +998,6 @@ int main(void){
 
     //  report weather after every (WEATHER_REPORT_INTERVAL) seconds.
         if(!((myclock.s + myclock.m + myclock.h) % WEATHER_REPORT_INTERVAL)) weatherreport(&lastcheck, heat[i], humidity[i], wind[i], cloud[i], &myclock);
-
 
     //  advance the clock by CLOCK_ADVANCE seconds.
         for (i = 0; i < CLOCK_ADVANCE; i++){
@@ -945,8 +1015,6 @@ int main(void){
                 myclock.h = 0;
             }
         }
-
-
 
     /*  tell the user which street and hood
         he's in, and whether or not he's in
@@ -974,7 +1042,6 @@ int main(void){
             if(*(map + player.position + 1) == STREET || *(map + player.position + 1) == DOOR) printf("e");
         }
 
-
     /*  if player is inside a shop, call insideshop() to give the shop's dialog.
         The shop's dialog shows inventory content, etc. */
         if(*(map + player.position) == SHOP) {
@@ -986,261 +1053,10 @@ int main(void){
 
         else if(*(map + player.position) == STREET) puts("\nYou are on the street.");
 
-
-
-    //  Make all shops stock up using my SupplierPurchasing algorithm.
-    if(DEBUG) printf("\nshops are stocking up...");
-    for (j = 0; j < totalshops; j++){
-
-    //  if shop has no space at all, skip it: no item has
-    //  anything less than size of 1.
-        if(shopdb[j].used_space == shopdb[j].space) continue;
-
-    //  get shop's hood number. Needed to calculate rrp and b.
-        current_hood = *(nhood + shopdb[j].loc);
-
-    //  move the shop's inventory quantities into the have column,
-    //  so that it includes shit that it already owns in the price calculations.
-    //  grab the head of the inventory linked list, and run through it.
-        curr_item = shopdb[j].inventory;
-        while(curr_item != NULL){
-            supplies[curr_item->id].have = curr_item->quantity;
-            curr_item = curr_item->next;
-        }
-
-
-   /*   This is what's about to happen. For each item, I calculate the profit density
-        of buying one more item. If that density is the highest in all the list, the
-        shop buys that product at that quantity. Checks are made that the quantity is
-        available to buy, and the shop has money and space. */
-
-        do{
-            possible_flag       = 0;
-            best_item           = TOTAL_ITEMS;
-            best_profit_density = 0.0;
-
-            for (i = 0; i < TOTAL_ITEMS; i++){
-
-                    //  check that this item exists. if not, skip it.
-                    if(supplies[i].quantity == 0) continue;
-
-                    //  check if I can even store this item. if not, skip it.
-                    if(supplies[i].size > (shopdb[j].space - shopdb[j].used_space)) continue;
-
-                    //  if shop has less than 0.01, then it effectively has no money.
-                    if(shopdb[j].money < 0.01) continue;
-
-                    //  check if I can even afford one more item.
-                    if(supplies[i].cost > shopdb[j].money) continue;
-
-                /*  calculate the item's b value, based on shop's location. b
-                    is equal to the population of that hood, which happens to
-                    be the same size as that hood's dumpster for that item. */
-                    supplies[i].b = dump[i][current_hood].size;
-
-                    //  number of total items upon which the profit is calculated.
-                    current_sales = supplies[i].bought + supplies[i].have + 1;
-
-                    current_price   = (current_sales - supplies[i].b) / supplies[i].m;      //  price you'd charge for it.
-                    if(current_price <= supplies[i].cost) continue;                         //  if it costs >= amount you'd charge, skip it.
-
-                    current_profit  = current_price - supplies[i].cost;                     //  profit per item sold.
-
-                //  calculate the profit density of one more item.
-                //  this is how much profit I get out of the item per size unit, per cost unit.
-                //  I add 1 to cost unit here to avoid division by zero when the item is free.
-                //  doesn't hurt too much.
-                    profit_density = current_profit / (float)supplies[i].size;
-
-                //  if another item isn't profitable, skip it.
-                    if(profit_density <= 0.0) continue;
-
-                //  if there's at least one item that exists, that I can afford and store, and that is profitable, then keep going next time.
-                    possible_flag = 1;
-
-                //  if this profit/space ratio is greatest found so far, save it.
-                    if(profit_density > best_profit_density){
-                        best_profit_density = profit_density;
-                        best_item           = i;
-                    }
-            }
-
-        //  if something was found, add it to bought list (like a shopping cart).
-            if(best_item != TOTAL_ITEMS){
-                supplies[best_item].quantity--;
-                supplies[best_item].bought++;
-                shopdb[j].money         -= supplies[best_item].cost;
-                shopdb[j].used_space    += supplies[best_item].size;
-                if(shopdb[j].used_space < 0) { puts("\nbonerrrrs!!!!!!!!!!!!##!@$@#$%$%^&%^*"); shopdb[j].used_space = 0; }
-            }
-
-        }while(possible_flag);
-
-    /*  Here is where I actually put the contents of the bought list
-        into the shop.  */
-        //printf("\n\nhere is what shop %u bought:", j);
-        for (i = 0; i < TOTAL_ITEMS; i++){
-            if(supplies[i].bought) {
-                stock_this.id       = supplies[i].id;
-                stock_this.quantity = supplies[i].bought;
-                stock_this.m        = supplies[i].m;
-                stock_this.n        = supplies[i].n;
-                stock_this.b        = supplies[i].b;
-                stock_this.price    = ((float)stock_this.quantity + (float)supplies[i].have - stock_this.b) / stock_this.m;
-                stock_this.size     = supplies[i].size;
-
-            //  if shop already has this item, then search for it and update it.
-            //  otherwise just use the stock_these function to put in a new item.
-                curr_item = shopdb[j].inventory;
-                found = 0;
-                while(curr_item != NULL){
-                    if(curr_item->id == stock_this.id){
-                        curr_item->quantity += stock_this.quantity;
-                        curr_item->price = stock_this.price;
-                        found = 1;
-                        break;
-                    }
-                    curr_item = curr_item->next;
-                }
-
-                if(!found) stock_these(&shopdb[j].inventory, &shopdb[j].inventory_end, &stock_this);
-
-            //  clear item for next shop.
-                supplies[i].bought  = 0;
-                supplies[i].have    = 0;
-
-                //printf("\nshop %u bought {item %u}", j, stock_this.id);
-
-            }
-        }
-    }
-    if(DEBUG) printf("done.");
-    //puts("\n\there is shopzero's inventory:");
-    //insideshop(&shopdb[0]);
-
-
-    if(DEBUG) printf("\nselling to NPC masses...");
-/*  Here, all shops sell their content to the NPC masses. for
-    every item in every shop, figure out how many will sell of
-    it will sell in that hood. if the shop has that quantity,
-    sell it. If it doesn't, sell all of what it has.    */
-    //puts("\nshops are about to sell to the masses.");
-    for (i = 0; i < totalshops; i++){
-    //  get shop's hood number. more readable to use this.
-        current_hood = *(nhood + shopdb[i].loc);
-
-    //  grab the head of the inventory linked list.
-        curr_item = shopdb[i].inventory;
-
-        //printf("\nshop %u, hood=%u.", i, current_hood);
-        //if(curr_item == NULL) puts("\nshop is empty.  next shop~!");
-
-        //if(i == 0 && curr_item == NULL) printf("\n\tshopzero has no stuff.");
-        while(curr_item != NULL){
-        //  if this item hasn't sold out, then process it.
-            if(curr_item->quantity != 0) {
-
-              //  if(i == 0) printf("\n\tshopzero has item %u: price=%.2f quant=%u m=%.2f b=%.2f", curr_item->id, curr_item->price, curr_item->quantity, curr_item->m, curr_item->b);
-
-            /*  use the current item's id to
-                look at the dumpster table in
-                this hood's column to get the
-                fullness for this item. */
-                current_dumpster_level  = dump[curr_item->id][current_hood].level;
-                current_dumpster_size   = dump[curr_item->id][current_hood].size;
-
-                //if(i==0) printf("\nthis item's dumpster level and size: %u, %u", current_dumpster_level, current_dumpster_size);
-
-            /*  Use that to figure out how many sales the shop gets using its current
-                price for the item. The b in the line equation gets multiplied by the
-                ratio (space left in dumpster)/(dumpster size).
-                Also, to avoid a rounding error preventing the shop from selling an item,
-                I've added 0.5 to the sales.  That way, selling 0.5 items becomes 1 item,
-                10.6 items becomes 11 items, etc.   */
-                current_sales = 0.5 + curr_item->m * curr_item->price + (1.0 - (double)current_dumpster_level / (double)current_dumpster_size) * curr_item->b;
-                if(current_sales < 0) current_sales = 0;    //  if negative however, that's not a sale.
-
-
-                //printf("\nitem %u: m=%.2f, price=%.2f, b=%.2f", curr_item->id, curr_item->m, curr_item->price, curr_item->b);
-                //printf("\n\titem %u x %u, dlevel=%u, dsize=%u, could sell %d", curr_item->id, curr_item->quantity, current_dumpster_level, current_dumpster_size, current_sales);
-
-            /*  if shop has this many items to sell then move
-                this number of items from shop to dumpster. */
-                if(current_sales != 0 && current_sales <= curr_item->quantity){
-                    //  edit the item's quantity, update dumpster value.
-                    curr_item->quantity -= current_sales;
-                    dump[curr_item->id][current_hood].level += current_sales;
-
-                    //  update shop's cash.
-                    shopdb[i].money += current_sales * curr_item->price;
-
-                    //  update shop's available space.
-                    shopdb[i].used_space -= current_sales * curr_item->size;
-
-                    //if(i==0) printf("\n\tshopzero just made %.2f", current_sales * curr_item->price);
-                }
-
-                //  otherwise, just sell all that it has.
-                else if(current_sales != 0){
-                    //printf("\nI don't have this many, so I'll sell all I have for this price.");
-                    shopdb[i].money += curr_item->quantity * curr_item->price;
-                    dump[curr_item->id][current_hood].level += curr_item->quantity;
-                    //if(i==0) printf("\n\tshopzero just made %.2f selling everything", curr_item->quantity * curr_item->price);
-                    curr_item->quantity = 0;
-
-                //  update shop's available space.
-                    shopdb[i].used_space -= curr_item->quantity * curr_item->size;
-
-                }
-            //  if dumpster is overflowing, force it to be equal to max size (full).
-                if(dump[curr_item->id][current_hood].level > dump[curr_item->id][current_hood].size) dump[curr_item->id][current_hood].level = dump[curr_item->id][current_hood].size;
-            }
-
-            //else printf("\nI have sold out of this item.");
-
-            curr_item = curr_item->next;
-        } //end of while
-    //puts("\npress key to continue");
-    //getche();
-    }//end of for.
-    if(DEBUG) puts("done.");
-
-
-
-//  if the quantity of a thing is zero at the suppliers, put more there.
-    if(DEBUG) printf("supplier is restocking...");
-    for (i = 0; i < TOTAL_ITEMS; i++){
-        if(supplies[i].bought == 0){
-            supplies[i].quantity    = rand() % 100 + 1;
-            supplies[i].bought      = 0;
-           // printf("\nsupplier's restocked {item %u}: %u items.", i, supplies[i].quantity);
-        }
-    }
-    if(DEBUG) puts("done.");
-
-
-    //  tell how may supplies are left at the suppliers.
-    if(DEBUG) {
-        count_supplies = 0;
-        for (i = 0; i < TOTAL_ITEMS; i++) count_supplies += supplies[i].quantity;
-        printf("there are %u items in the suppliers", count_supplies);
-    }
-
-    //  do some dumpster rotting.
-    if(DEBUG) printf("\nrotting some dumpsters...");
-    for (i = 0; i < TOTAL_ITEMS; i++){
-        for (j = 0; j < hoodindex; j++){
-            if(dump[i][j].level == 0) continue;
-            if(dump[i][j].rot_amount >= dump[i][j].level) dump[i][j].level = 0;
-            else dump[i][j].level -= dump[i][j].rot_amount;
-        }
-    }
-    if(DEBUG) puts("done.");
-
         //  get user's input.
         printf("\n: ");
         //input=getchar();
-        input = getche();
+        input = getch();
         putchar('\n');
 
         if(input == 'x') exit(0);
@@ -1249,7 +1065,7 @@ int main(void){
         with the escape character, and convert to
         a direction.    */
         if(input == -32){
-            input=getche();
+            input=getch();
             if(input == 'H') input = 'n';
             else if(input == 'P') input = 's';
             else if(input == 'K') input = 'w';
@@ -1285,6 +1101,77 @@ int main(void){
         }
 
 
+    /*  Here, all shops sell their content to the NPC masses. for
+        every item in every shop, figure out how many will sell of
+        it will sell in that hood. if the shop has that quantity,
+        sell it. If it doesn't, sell all of what it has.    */
+        //puts("\nshops are about to sell to the masses.");
+        for (i = 0; i < totalshops; i++){
+        //  get shop's hood number. more readable to use this.
+            current_hood = *(nhood + shopdb[i].loc);
+
+        //  grab the head of the inventory linked list.
+            curr_item = shopdb[i].inventory;
+
+            //printf("\nshop %u, hood=%u.", i, current_hood);
+            //if(curr_item == NULL) puts("\nshop is empty.  next shop~!");
+
+            if(i == 0 && curr_item == NULL) printf("\nshopzero has no stuff.");
+            while(curr_item != NULL){
+            //  if this item hasn't sold out, then process it.
+                if(curr_item->quantity != 0) {
+
+                    if(i == 0) printf("\nshopzero has item %u: price=%.2f quant=%u", curr_item->id, curr_item->price, curr_item->quantity);
+
+                /*  use the current item's id to
+                    look at the dumpster table in
+                    this hood's column to get the
+                    fullness for this item. */
+                    current_dumpster_level  = dump[curr_item->id][current_hood].level;
+                    current_dumpster_size   = dump[curr_item->id][current_hood].size;
+
+                    if(i==0) printf("\nthis item's dumpster level and size: %u, %u", current_dumpster_level, current_dumpster_size);
+
+                /*  Use that to figure out how many sales the shop gets using its current
+                    price for the item. The b in the line equation gets multiplied by the
+                    ratio (space left in dumpster)/(dumpster size). */
+                    current_sales = curr_item->m * curr_item->price + (1.0 - (double)current_dumpster_level / (double)current_dumpster_size) * curr_item->b;
+                    if(current_sales < 0) current_sales = 0;
+
+                    if(i==0 && current_sales) printf("\nshopzero could potentially sell %d of these.", current_sales);
+
+                    //printf("\nitem %u: m=%.2f, price=%.2f, b=%.2f", curr_item->id, curr_item->m, curr_item->price, curr_item->b);
+                    //printf("\n\titem %u x %u, dlevel=%u, dsize=%u, could sell %d", curr_item->id, curr_item->quantity, current_dumpster_level, current_dumpster_size, current_sales);
+
+                /*  if shop has this many items to sell then move
+                    this number of items from shop to dumpster. */
+                    if(current_sales != 0 && current_sales <= curr_item->quantity){
+                        //printf("\nI have enough to fulfill this. selling %d items", current_sales);
+                        curr_item->quantity -= current_sales;
+                        dump[curr_item->id][current_hood].level += current_sales;
+                        shopdb[i].money += current_sales * curr_item->price;
+                        if(i==0) printf("\nshopzero just made %.2f", current_sales * curr_item->price);
+                    }
+
+                    //  otherwise, just sell all that it has.
+                    else if(current_sales != 0){
+                        //printf("\nI don't have this many, so I'll sell all I have for this price.");
+                        shopdb[i].money += curr_item->quantity * curr_item->price;
+                        dump[curr_item->id][current_hood].level += curr_item->quantity;
+                        if(i==0) printf("\nshopzero just made %.2f selling everything", curr_item->quantity * curr_item->price);
+                        curr_item->quantity = 0;
+                    }
+                //  if dumpster is overflowing, force it to be equal to max size (full).
+                    if(dump[curr_item->id][current_hood].level > dump[curr_item->id][current_hood].size) dump[curr_item->id][current_hood].level = dump[curr_item->id][current_hood].size;
+                }
+
+                //else printf("\nI have sold out of this item.");
+
+                curr_item = curr_item->next;
+            } //end of while
+        //puts("\npress key to continue");
+        //getch();
+        }//end of for.
    }//end of infinite loop.
 //  ----------^--------big ugly game, just for testing------------^------------------
 
@@ -1685,14 +1572,10 @@ unsigned weatherreport(weather *last, double heat, double humidity, double wind,
         last->firsttime=0;
 
         //  time of day.
-        if(time < 12){          printf("it is morning. ");  last->tod = 0; }
-        else if(time < 17){     printf("it is afternoon. ");last->tod = 1; }
-        else if(time < 20){     printf("it is evening. ");  last->tod = 2; }
+        if(time < 12.0){        printf("it is morning. ");  last->tod = 0; }
+        else if(time < 17.0){   printf("it is afternoon. ");last->tod = 1; }
+        else if(time < 20.0){   printf("it is evening. ");  last->tod = 2; }
         else{                   printf("it is night. ");    last->tod = 3; }
-
-        //  sunrise and sunset.
-        if(time >= 6 && time<=8){           printf("sunrise. ");        last->sun_riseset = 0; }
-        else if(time >= 17 && time <= 19){  printf("sunset. ");         last->sun_riseset = 1; }
 
         //  temp.
         if(heat < 32.0){        printf("freezing. ");       last->temp = 0; }
@@ -1741,10 +1624,6 @@ unsigned weatherreport(weather *last, double heat, double humidity, double wind,
         else if(time >= 12.0 && time < 17.0 && last->tod != 1){ printf("it is afternoon. ");  last->tod = 1; }
         else if(time >= 17.0 && time < 20.0 && last->tod != 2){ printf("it is evening. ");    last->tod = 2; }
         else if(time >= 20.0 && last->tod != 3){                printf("it is night. ");      last->tod = 3; }
-
-        //  sunrise and sunset.
-        if(time >= 6 && time<=8 && last->tod != 0){           printf("sunrise. ");        last->sun_riseset = 0; }
-        else if(time >= 17 && time <= 19 && last->tod != 1){  printf("sunset. ");         last->sun_riseset = 1; }
 
         //  temp.
         if(heat < 32.0 && last->temp != 0){                    printf("freezing. ");   last->temp = 0; }
@@ -1854,26 +1733,23 @@ void insideshop(shop *shopx){
     }
 
     else{
-        printf("\n\nSHOP at %u", shopx->loc);
+        printf("\nSHOP at %u", shopx->loc);
         //printf("\nspace: %u", shopx->space);
         //printf("\nmoney: %.2f", shopx->money);
 
         puts("\n\nINVENTORY");
         puts("---------");
-        puts("item\t\tquantity\tprice\tsize");
         //  display this shop's inventory list.
         scout = shopx->inventory;
         total_items = 0;
         while(scout){
             if(scout->quantity != 0) {
-                printf("\n{item %u}\t%u\t\t%.2f\t%u", scout->id, scout->quantity, scout->price, scout->size);
+                printf("\n{item %u}\tx %u\tprice = %.2f", scout->id, scout->quantity, scout->price);
                 total_items++;
             }
             scout = scout->next;
         }
         if(total_items == 0) printf("\n{empty: sold out}");
-        else printf("\n\n%u items total.", total_items);
-        printf("\nspace: %u|%u\tmoney:%.2f\n", shopx->used_space, shopx->space, shopx->money);
     }
 }
 
