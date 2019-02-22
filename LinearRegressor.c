@@ -29,7 +29,7 @@
 #include <string.h>
 #include "MyLinAlg.c"
 
-#define ROWS 3  //  make sure rows is >= COLS.
+#define ROWS 9  //  make sure rows is >= COLS.
 #define COLS 3
 
 int main(int argc, char *argv[]){
@@ -47,9 +47,16 @@ int main(int argc, char *argv[]){
     double transmult2[COLS][ROWS];                       //  transmult times xtrans.
 
     double matrix[ROWS][COLS]={       //  this is the shit that the user gives me.  I'll reuse the space once I move some stuff around.  It will be matrix x after that.
-        {12, 3, 204},
-        {2, 11, 445},
-        {11, 0, 45}
+
+        {6, 22.2, 12.54},
+        {7, 23.2, 19.24},
+        {7, 21.6, 14.27},
+        {8, 22.9, 17.9},
+        {9, 23.3, 21.09},
+        {10, 25.6, 18.1},
+        {10, 25.5, 19.03},
+        {10, 24.7, 19.5},
+        {14, 22.9, 27.3}
     };
 
     //  calculate average of actual y values for r-squared later.
